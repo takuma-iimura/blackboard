@@ -2,8 +2,9 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>‚±‚Ñ‚Æ‚ÌZ‚Ü‚¤•”Â</title>
+    <title>ã“ã³ã¨ã®ä½ã¾ã†é»’æ¿</title>
     <style>
         * {
             margin: 0;
@@ -12,7 +13,6 @@
         }
         body {
             background-color: #121316;
-            /* ”wŒi‰æ‘œƒpƒX‚ğ‘Š‘ÎƒpƒX‚É•ÏX */
             background-image: url("image/kokuban.jpg");
             background-size: cover;
             background-position: center;
@@ -63,7 +63,7 @@
 <body>
 
 <div id="ui-container">
-    <button id="btn-clear" class="ui-btn">?? ‚º‚ñ‚Ô‚¯‚·</button>
+    <button id="btn-clear" class="ui-btn">ğŸ§¹ ãœã‚“ã¶ã‘ã™</button>
 </div>
 
 <canvas id="gameCanvas"></canvas>
@@ -80,7 +80,7 @@ let pointerMoved = false;
 let pointerStartPos = null;
 const LINE_THICKNESS = 4;
 
-// ƒhƒ‰ƒbƒO‘€ìi‰_ & ¬lj
+// ãƒ‰ãƒ©ãƒƒã‚°æ“ä½œï¼ˆé›² & å°äººï¼‰
 let draggedCloud = null;
 let cloudDragOffset = { x: 0, y: 0 };
 let draggedKobito = null;
@@ -105,7 +105,7 @@ let footprints = [];
 let floatTexts = [];
 
 // ------------------------------
-// ¬l‰æ‘œi7í—Şj‚Ì‘Š‘ÎƒpƒXİ’è
+// å°äººç”»åƒï¼ˆ7ç¨®é¡ï¼‰ã®ç›¸å¯¾ãƒ‘ã‚¹è¨­å®š
 // ------------------------------
 const KOBITO_IMAGES = [];
 const KOBITO_SOURCES = [
@@ -125,25 +125,25 @@ KOBITO_SOURCES.forEach(src => {
 });
 
 // ------------------------------
-// ‹‰æ‘œ‚Ì‘Š‘ÎƒpƒXİ’è
+// ç‰›ç”»åƒã®ç›¸å¯¾ãƒ‘ã‚¹è¨­å®š
 // ------------------------------
 const cowImg = new Image();
 cowImg.src = "image/ushi.png";
 
-// Õ“ËƒJƒeƒSƒŠ
-const CATEGORY_DEFAULT = 0x0001; // ’n–ÊAüAƒAƒCƒeƒ€
-const CATEGORY_KOBITO  = 0x0002; // ‚±‚Ñ‚Æ
-const CATEGORY_COW     = 0x0004; // ‹
-const CATEGORY_LADDER  = 0x0008; // ’òq
+// è¡çªã‚«ãƒ†ã‚´ãƒª
+const CATEGORY_DEFAULT = 0x0001; // åœ°é¢ã€ç·šã€ã‚¢ã‚¤ãƒ†ãƒ 
+const CATEGORY_KOBITO  = 0x0002; // ã“ã³ã¨
+const CATEGORY_COW     = 0x0004; // ç‰›
+const CATEGORY_LADDER  = 0x0008; // æ¢¯å­
 
 const ITEM_TYPES = [
-    { type: 'seed',        label: 'ƒ^ƒl', radius: 10 },
-    { type: 'largeBall',   label: '‘å‹Ê', color: '#FF5252', radius: 22 },
-    { type: 'ladderShort', label: '’òq', color: '#FFF9C4', width: 28, height: 85 },
-    { type: 'ladderLong',  label: '‚È‚ª‚¢’òq', color: '#FFF9C4', width: 28, height: 165 },
-    { type: 'fireball',    label: '‰Î‚Ì‹Ê', color: '#FF3D00', radius: 16 },
-    { type: 'mushroom',    label: 'ƒLƒmƒR', color: '#FF1744', width: 44, height: 28 },
-    { type: 'cow',         label: '‹', color: '#FFFFFF', width: 96, height: 56 }
+    { type: 'seed',        label: 'ã‚¿ãƒ', radius: 10 },
+    { type: 'largeBall',   label: 'å¤§ç‰', color: '#FF5252', radius: 22 },
+    { type: 'ladderShort', label: 'æ¢¯å­', color: '#FFF9C4', width: 28, height: 85 },
+    { type: 'ladderLong',  label: 'ãªãŒã„æ¢¯å­', color: '#FFF9C4', width: 28, height: 165 },
+    { type: 'fireball',    label: 'ç«ã®ç‰', color: '#FF3D00', radius: 16 },
+    { type: 'mushroom',    label: 'ã‚­ãƒã‚³', color: '#FF1744', width: 44, height: 28 },
+    { type: 'cow',         label: 'ç‰›', color: '#FFFFFF', width: 96, height: 56 }
 ];
 
 let sun = { x: 0, y: 0, radius: 38, flare: 0 };
@@ -282,9 +282,9 @@ function updateButterflies() {
                     if (Math.random() < 0.03 && !b.perchedOn) {
                         b.perchedOn = k;
                         b.restTimer = 70;
-                        addFloatText(k.position.x, k.position.y - 35, 'ô');
+                        addFloatText(k.position.x, k.position.y - 35, 'â™ª');
                     } else if (Math.random() < 0.02) {
-                        addFloatText(k.position.x, k.position.y - 35, '‚¿‚å‚¤‚¿‚åI');
+                        addFloatText(k.position.x, k.position.y - 35, 'ã¡ã‚‡ã†ã¡ã‚‡ï¼');
                     }
                 }
             });
@@ -354,9 +354,6 @@ function createBoundaries() {
     World.add(world, ground);
 }
 
-// ------------------------------
-// ‚±‚Ñ‚Æ & ‹‚Ì¶¬EAI
-// ------------------------------
 function spawnKobito() {
     if (kobitos.length >= 30) return;
 
@@ -403,13 +400,13 @@ function spawnCow(x, y, dir) {
     cows.push(body);
     World.add(world, body);
 
-    addFloatText(x, y - 35, 'ƒ‚ƒH?I');
+    addFloatText(x, y - 35, 'ãƒ¢ã‚©ã€œï¼');
 }
 
 function triggerSunLight() {
     sun.flare = 1.0;
     rainbowChalkTimer = performance.now() + 10 * 1000;
-    addFloatText(sun.x, sun.y + 45, '‚É‚¶‚¢‚ëƒ`ƒ‡[ƒNI');
+    addFloatText(sun.x, sun.y + 45, 'ã«ã˜ã„ã‚ãƒãƒ§ãƒ¼ã‚¯ï¼');
 
     const allBodies = Composite.allBodies(world);
     const seeds = allBodies.filter(b => b.customItem && b.customItem.type === 'seed');
@@ -417,7 +414,7 @@ function triggerSunLight() {
     seeds.forEach(s => {
         if (s.customItem.stage < 3) {
             s.customItem.stage++;
-            addFloatText(s.position.x, s.position.y - 25, '‚®‚ñ‚®‚ñI');
+            addFloatText(s.position.x, s.position.y - 25, 'ãã‚“ãã‚“ï¼');
             for (let i = 0; i < 8; i++) {
                 particles.push({
                     x: s.position.x, y: s.position.y,
@@ -430,7 +427,7 @@ function triggerSunLight() {
 
     kobitos.forEach(k => {
         if (Math.random() < 0.4) {
-            addFloatText(k.position.x, k.position.y - 35, '‚Û‚©‚Û‚©?');
+            addFloatText(k.position.x, k.position.y - 35, 'ã½ã‹ã½ã‹ã€œ');
         }
     });
 }
@@ -455,7 +452,7 @@ function updateEntitiesAI() {
     const largeBalls  = allBodies.filter(b => b.customItem && b.customItem.type === 'largeBall');
     const customLines = allBodies.filter(b => b.isCustomLine);
 
-    // ƒ^ƒl‚Ìª’£‚è
+    // ã‚¿ãƒã®æ ¹å¼µã‚Š
     seeds.forEach(s => {
         if (!s.customItem.isRooted) {
             if (s.position.y >= GROUND_Y - 12 || (Math.abs(s.velocity.y) < 0.15 && Math.abs(s.velocity.x) < 0.15 && s.position.y > 150)) {
@@ -468,7 +465,7 @@ function updateEntitiesAI() {
         }
     });
 
-    // ‹‚ÌAI
+    // ç‰›ã®AI
     cows.forEach(c => {
         Body.setVelocity(c, { x: 3.2 * c.direction, y: c.velocity.y });
 
@@ -499,7 +496,7 @@ function updateEntitiesAI() {
     cowRemoves.forEach(c => World.remove(world, c));
     cows = cows.filter(c => !c.toRemove);
 
-    // ‰æ–ÊŠOƒAƒCƒeƒ€Á–Å
+    // ç”»é¢å¤–ã‚¢ã‚¤ãƒ†ãƒ æ¶ˆæ»…
     allBodies.forEach(b => {
         if (b.customItem) {
             if (b.position.x < -120 || b.position.x > screenWidth + 120 || b.position.y > screenHeight + 100) {
@@ -508,7 +505,7 @@ function updateEntitiesAI() {
         }
     });
 
-    // ‘å‹Ê‚Ì‰Ÿ‚µ‡‚¢jˆø‚«ƒoƒgƒ‹
+    // å¤§ç‰ã®æŠ¼ã—åˆã„ç¶±å¼•ããƒãƒˆãƒ«
     largeBalls.forEach(ball => {
         if (!ball.customItem.battle) {
             ball.customItem.battle = {
@@ -551,9 +548,9 @@ function updateEntitiesAI() {
 
             if (b.fightTimer % 20 === 0) {
                 if (Math.random() < 0.5) {
-                    addFloatText(ball.position.x - 30, ball.position.y - 35, '‚®‚Ê‚Êc');
+                    addFloatText(ball.position.x - 30, ball.position.y - 35, 'ãã¬ã¬â€¦');
                 } else {
-                    addFloatText(ball.position.x + 30, ball.position.y - 35, '‚¨‚¹‚¨‚¹?I');
+                    addFloatText(ball.position.x + 30, ball.position.y - 35, 'ãŠã›ãŠã›ã€œï¼');
                 }
             }
 
@@ -572,26 +569,26 @@ function updateEntitiesAI() {
                 b.state = 'idle';
 
                 if (winner === 'left') {
-                    addFloatText(ball.position.x, ball.position.y - 50, '‚Ğ‚¾‚èƒ`[ƒ€‚Ì‚©‚¿I');
+                    addFloatText(ball.position.x, ball.position.y - 50, 'ã²ã ã‚Šãƒãƒ¼ãƒ ã®ã‹ã¡ï¼');
                     leftPushers.forEach(k => {
                         Body.setVelocity(k, { x: 0, y: -7.5 });
-                        addFloatText(k.position.x, k.position.y - 35, '‚â‚Á‚½[I');
+                        addFloatText(k.position.x, k.position.y - 35, 'ã‚„ã£ãŸãƒ¼ï¼');
                     });
                     rightPushers.forEach(k => {
                         Body.setVelocity(k, { x: 4.0, y: -4.5 });
                         k.stunTimer = 25;
-                        addFloatText(k.position.x, k.position.y - 35, 'ƒYƒRƒbI');
+                        addFloatText(k.position.x, k.position.y - 35, 'ã‚ºã‚³ãƒƒï¼');
                     });
                 } else {
-                    addFloatText(ball.position.x, ball.position.y - 50, '‚İ‚¬ƒ`[ƒ€‚Ì‚©‚¿I');
+                    addFloatText(ball.position.x, ball.position.y - 50, 'ã¿ããƒãƒ¼ãƒ ã®ã‹ã¡ï¼');
                     rightPushers.forEach(k => {
                         Body.setVelocity(k, { x: 0, y: -7.5 });
-                        addFloatText(k.position.x, k.position.y - 35, '‚â‚Á‚½[I');
+                        addFloatText(k.position.x, k.position.y - 35, 'ã‚„ã£ãŸãƒ¼ï¼');
                     });
                     leftPushers.forEach(k => {
                         Body.setVelocity(k, { x: -4.0, y: -4.5 });
                         k.stunTimer = 25;
-                        addFloatText(k.position.x, k.position.y - 35, 'ƒYƒRƒbI');
+                        addFloatText(k.position.x, k.position.y - 35, 'ã‚ºã‚³ãƒƒï¼');
                     });
                 }
 
@@ -614,12 +611,12 @@ function updateEntitiesAI() {
         }
     });
 
-    // ‚±‚Ñ‚Æ‚ÌAI
+    // ã“ã³ã¨ã®AI
     const nowTime = performance.now();
     kobitos.forEach(k => {
         if (k === draggedKobito) return;
 
-        // •—‘D‚Åã¸’†
+        // é¢¨èˆ¹ã§ä¸Šæ˜‡ä¸­
         if (k.state === 'balloon') {
             Body.setVelocity(k, {
                 x: Math.sin(nowTime * 0.003 + k.balloonSwing) * 0.9 + k.direction * 0.4,
@@ -629,7 +626,7 @@ function updateEntitiesAI() {
             for (let i = bubbles.length - 1; i >= 0; i--) {
                 const b = bubbles[i];
                 if (Math.hypot(k.position.x - b.x, (k.position.y - 45) - b.y) < b.radius + 25) {
-                    addFloatText(k.position.x, k.position.y - 30, '‚¦‚¢‚ÁI');
+                    addFloatText(k.position.x, k.position.y - 30, 'ãˆã„ã£ï¼');
                     popBubble(i);
                 }
             }
@@ -637,7 +634,7 @@ function updateEntitiesAI() {
             for (const s of stars) {
                 if (Math.hypot(k.position.x - s.x, (k.position.y - 45) - s.y) < s.radius + 25) {
                     spawnStarBurst(s.x, s.y);
-                    addFloatText(k.position.x, k.position.y - 30, 'ƒLƒ‰ƒLƒ‰?');
+                    addFloatText(k.position.x, k.position.y - 30, 'ã‚­ãƒ©ã‚­ãƒ©ã€œ');
                 }
             }
 
@@ -646,7 +643,7 @@ function updateEntitiesAI() {
                     c.rainingTimer = 100;
                     k.state = 'walk';
                     k.stunTimer = 25;
-                    addFloatText(k.position.x, k.position.y - 30, 'ƒpƒ`ƒ“I');
+                    addFloatText(k.position.x, k.position.y - 30, 'ãƒ‘ãƒãƒ³ï¼');
                     break;
                 }
             }
@@ -657,7 +654,7 @@ function updateEntitiesAI() {
             return;
         }
 
-        // ‘å‹Êæ‚è
+        // å¤§ç‰ä¹—ã‚Š
         if (k.state === 'ballRide') {
             const ball = k.ridingBall;
             if (!ball || !world.bodies.includes(ball)) {
@@ -672,13 +669,13 @@ function updateEntitiesAI() {
                     k.state = 'walk';
                     k.stunTimer = 15;
                     Body.setVelocity(k, { x: k.direction * 3, y: -6 });
-                    addFloatText(k.position.x, k.position.y - 35, 'ƒWƒƒƒ“ƒvI');
+                    addFloatText(k.position.x, k.position.y - 35, 'ã‚¸ãƒ£ãƒ³ãƒ—ï¼');
                 }
                 return;
             }
         }
 
-        // ‚¨K‚Å‚·‚×‚è‘ä
+        // ãŠå°»ã§ã™ã¹ã‚Šå°
         const footX = k.position.x;
         const footY = k.position.y + 24;
         let currentSlopeLine = null;
@@ -736,7 +733,7 @@ function updateEntitiesAI() {
             k.state = 'walk';
             k.stunTimer = 25;
             Body.setVelocity(k, { x: k.direction * 6.2, y: -6.8 });
-            addFloatText(k.position.x, k.position.y - 35, 'ƒLƒƒ[ƒbI');
+            addFloatText(k.position.x, k.position.y - 35, 'ã‚­ãƒ£ãƒ¼ãƒƒï¼');
             return;
         }
 
@@ -750,7 +747,7 @@ function updateEntitiesAI() {
             return;
         }
 
-        // ƒCƒ`ƒS‚ğH‚×‚é ? •—‘D
+        // ã‚¤ãƒã‚´ã‚’é£Ÿã¹ã‚‹ âœ é¢¨èˆ¹
         if (k.state === 'eat') {
             Body.setVelocity(k, { x: 0, y: k.velocity.y });
             k.eatingTimer--;
@@ -758,12 +755,12 @@ function updateEntitiesAI() {
                 k.state = 'balloon';
                 k.balloonColor = ['#FF4081', '#00E5FF', '#FFD600', '#76FF03', '#E040FB'][Math.floor(Math.random() * 5)];
                 k.balloonSwing = Math.random() * 100;
-                addFloatText(k.position.x, k.position.y - 35, '‚Ó‚¤‚¹‚ñ?');
+                addFloatText(k.position.x, k.position.y - 35, 'ãµã†ã›ã‚“ã€œ');
             }
             return;
         }
 
-        // ‘å‹Êæ‚è”»’è
+        // å¤§ç‰ä¹—ã‚Šåˆ¤å®š
         for (const ball of largeBalls) {
             if (!ball.customItem.battle || ball.customItem.battle.state === 'idle') {
                 const dx = Math.abs(k.position.x - ball.position.x);
@@ -772,13 +769,13 @@ function updateEntitiesAI() {
                     k.state = 'ballRide';
                     k.ridingBall = ball;
                     k.ballRideTimer = 100;
-                    addFloatText(k.position.x, k.position.y - 45, '‚¨‚Á‚Æ‚Á‚ÆI');
+                    addFloatText(k.position.x, k.position.y - 45, 'ãŠã£ã¨ã£ã¨ï¼');
                     return;
                 }
             }
         }
 
-        // ‹‚Æ‚ÌÚG
+        // ç‰›ã¨ã®æ¥è§¦
         for (const cow of cows) {
             const dx = Math.abs(k.position.x - cow.position.x);
             const dy = Math.abs(k.position.y - cow.position.y);
@@ -787,19 +784,19 @@ function updateEntitiesAI() {
                 const dir = cow.direction;
                 Body.setVelocity(k, { x: dir * (Math.random() * 4 + 7), y: -11.5 });
                 Body.setAngularVelocity(k, dir * 0.4);
-                addFloatText(k.position.x, k.position.y - 35, '‚í[‚ÁI');
+                addFloatText(k.position.x, k.position.y - 35, 'ã‚ãƒ¼ã£ï¼');
                 return;
             }
         }
 
-        // ‰Î‚Ì‹Ê‚Æ‚ÌÚG
+        // ç«ã®ç‰ã¨ã®æ¥è§¦
         for (const fb of fireballs) {
             if (Math.hypot(k.position.x - fb.position.x, k.position.y - fb.position.y) < 34) {
                 k.stunTimer = 40;
                 const bounceDir = k.position.x > fb.position.x ? 1 : -1;
                 Body.setVelocity(k, { x: bounceDir * (Math.random() * 3 + 4), y: -8 });
                 Body.setAngularVelocity(k, bounceDir * 0.3);
-                addFloatText(k.position.x, k.position.y - 35, 'ƒAƒ`ƒbI');
+                addFloatText(k.position.x, k.position.y - 35, 'ã‚¢ãƒãƒƒï¼');
                 for (let i = 0; i < 6; i++) {
                     particles.push({
                         x: k.position.x, y: k.position.y,
@@ -811,14 +808,14 @@ function updateEntitiesAI() {
             }
         }
 
-        // ƒLƒmƒR‚Æ‚ÌÚG
+        // ã‚­ãƒã‚³ã¨ã®æ¥è§¦
         for (const m of mushrooms) {
             const dist = Math.hypot(k.position.x - m.position.x, k.position.y - m.position.y);
             if (dist < 46) {
                 k.stunTimer = 35;
                 m.customItem.squish = 1.0;
                 Body.setVelocity(k, { x: k.direction * 4.2, y: -14.5 });
-                addFloatText(k.position.x, k.position.y - 35, 'ƒsƒ‡[ƒ“I');
+                addFloatText(k.position.x, k.position.y - 35, 'ãƒ”ãƒ§ãƒ¼ãƒ³ï¼');
 
                 m.customItem.jumpCount = (m.customItem.jumpCount || 0) + 1;
                 if (m.customItem.jumpCount >= 4) {
@@ -835,14 +832,14 @@ function updateEntitiesAI() {
                             decay: 0.04
                         });
                     }
-                    addFloatText(m.position.x, m.position.y - 25, 'ƒ|ƒ“ƒbI');
+                    addFloatText(m.position.x, m.position.y - 25, 'ãƒãƒ³ãƒƒï¼');
                     World.remove(world, m);
                 }
                 return;
             }
         }
 
-        // ‰_E¯“’B”»’è
+        // é›²ãƒ»æ˜Ÿåˆ°é”åˆ¤å®š
         clouds.forEach(c => {
             if (Math.hypot(k.position.x - c.x, k.position.y - c.y) < 65) {
                 c.rainingTimer = 80;
@@ -854,19 +851,19 @@ function updateEntitiesAI() {
             }
         });
 
-        // ƒCƒ`ƒS‚ğH‚×‚é
+        // ã‚¤ãƒã‚´ã‚’é£Ÿã¹ã‚‹
         for (const b of berries) {
             if (Math.hypot(k.position.x - b.position.x, k.position.y - b.position.y) < 32) {
                 k.state = 'eat';
                 k.eatingTimer = 40;
-                addFloatText(b.position.x, b.position.y - 20, '‚à‚®‚à‚®');
+                addFloatText(b.position.x, b.position.y - 20, 'ã‚‚ãã‚‚ã');
                 World.remove(world, b);
                 break;
             }
         }
         if (k.state === 'eat') return;
 
-        // ’òq‚ğ“o‚é
+        // æ¢¯å­ã‚’ç™»ã‚‹
         let onLadder = null;
         for (const lad of ladders) {
             const dx = Math.abs(k.position.x - lad.position.x);
@@ -903,12 +900,12 @@ function updateEntitiesAI() {
                             decay: 0.04
                         });
                     }
-                    addFloatText(onLadder.position.x, onLadder.position.y - 20, 'ƒpƒbI');
+                    addFloatText(onLadder.position.x, onLadder.position.y - 20, 'ãƒ‘ãƒƒï¼');
                     World.remove(world, onLadder);
                 }
             }
         } else {
-            // ’Êí•às
+            // é€šå¸¸æ­©è¡Œ
             k.state = 'walk';
             Body.setVelocity(k, { x: 1.2 * k.direction, y: k.velocity.y });
 
@@ -938,7 +935,7 @@ function updateEntitiesAI() {
 }
 
 // ------------------------------
-// “VŒóE‰‰o
+// å¤©å€™ãƒ»æ¼”å‡º
 // ------------------------------
 function makeWeather(cloud) {
     if (cloud.type === 'rain') {
@@ -969,7 +966,7 @@ function updateWeather() {
     const seeds     = allBodies.filter(b => b.customItem && b.customItem.type === 'seed');
     const fireballs = allBodies.filter(b => b.customItem && b.customItem.type === 'fireball');
 
-    // 1. ‰J
+    // 1. é›¨
     for (let i = rainDrops.length - 1; i >= 0; i--) {
         const r = rainDrops[i];
         r.y += r.vy;
@@ -979,7 +976,7 @@ function updateWeather() {
                 s.customItem.rainHits = (s.customItem.rainHits || 0) + 1;
                 if (s.customItem.rainHits % 5 === 0) {
                     s.customItem.stage++;
-                    addFloatText(s.position.x, s.position.y - 20, '‚·‚­‚·‚­c');
+                    addFloatText(s.position.x, s.position.y - 20, 'ã™ãã™ãâ€¦');
                 }
                 rainDrops.splice(i, 1);
                 continue;
@@ -1002,10 +999,10 @@ function updateWeather() {
 
                 if (fb.customItem.waterHits >= 3) {
                     fb.customItem.type = 'largeBall';
-                    fb.customItem.label = '‘å‹Ê';
+                    fb.customItem.label = 'å¤§ç‰';
                     fb.customItem.color = '#FF5252';
                     fb.customItem.radius = 22;
-                    addFloatText(fb.position.x, fb.position.y - 25, 'ƒVƒ…?ƒbI');
+                    addFloatText(fb.position.x, fb.position.y - 25, 'ã‚·ãƒ¥ã€œãƒƒï¼');
                 }
 
                 rainDrops.splice(i, 1);
@@ -1018,7 +1015,7 @@ function updateWeather() {
         }
     }
 
-    // 2. á
+    // 2. é›ª
     const nowTime = performance.now();
     for (let i = snowFlakes.length - 1; i >= 0; i--) {
         const s = snowFlakes[i];
@@ -1030,7 +1027,7 @@ function updateWeather() {
         }
     }
 
-    // 3. ƒJƒ~ƒiƒŠ
+    // 3. ã‚«ãƒŸãƒŠãƒª
     clouds.forEach(c => {
         if (c.type === 'thunder' && c.rainingTimer > 0) {
             c.lightningTimer = (c.lightningTimer || 0) + 1;
@@ -1046,7 +1043,7 @@ function updateWeather() {
 
                 kobitos.forEach(k => {
                     if (Math.abs(k.position.x - lx) < 90) {
-                        addFloatText(k.position.x, k.position.y - 35, '‚É‚°‚ë?I');
+                        addFloatText(k.position.x, k.position.y - 35, 'ã«ã’ã‚ã€œï¼');
                         Body.setVelocity(k, { x: k.direction * 3.6, y: -4.5 });
                     }
                 });
@@ -1062,7 +1059,7 @@ function updateWeather() {
 
 function spawnStarBurst(x, y) {
     rainbowChalkTimer = performance.now() + 10 * 1000;
-    addFloatText(x, y - 25, '‚É‚¶‚¢‚ëƒ`ƒ‡[ƒNI');
+    addFloatText(x, y - 25, 'ã«ã˜ã„ã‚ãƒãƒ§ãƒ¼ã‚¯ï¼');
 
     for (let i = 0; i < 16; i++) {
         const angle = Math.random() * Math.PI * 2;
@@ -1079,12 +1076,13 @@ function spawnStarBurst(x, y) {
     }
 }
 
+// ã™ã¹ã¦ã®æ–‡å­—ã‚’ç™½æ–‡å­—ï¼ˆ#FFFFFFï¼‰ã«çµ±ä¸€
 function addFloatText(x, y, text) {
     floatTexts.push({ x: x, y: y, text: text, color: '#FFFFFF', life: 1.0 });
 }
 
 // ------------------------------
-// “ü—Í & ‘€ì
+// å…¥åŠ› & æ“ä½œ
 // ------------------------------
 function handlePointerDown(e) {
     const rect = canvas.getBoundingClientRect();
@@ -1100,32 +1098,32 @@ function handlePointerDown(e) {
 
     const nowTime = performance.now();
 
-    // 1. ƒ`ƒ‡ƒEƒ`ƒ‡ƒ^ƒbƒv
+    // 1. ãƒãƒ§ã‚¦ãƒãƒ§ã‚¿ãƒƒãƒ—
     for (const b of butterflies) {
         if (Math.hypot(pos.x - b.x, pos.y - b.y) < 36) {
             b.targetY = b.y - 100;
             b.targetX = (Math.random() - 0.5) * screenWidth + b.x;
             b.vy = -3.5;
             b.perchedOn = null;
-            addFloatText(b.x, b.y - 20, 'ƒqƒ‰ƒŠ?');
+            addFloatText(b.x, b.y - 20, 'ãƒ’ãƒ©ãƒªã€œ');
             isDrawing = false;
             return;
         }
     }
 
-    // 2. ‰_‚Ìƒ^ƒbƒv & ƒ_ƒuƒ‹ƒ^ƒbƒv•Ïg
+    // 2. é›²ã®ã‚¿ãƒƒãƒ— & ãƒ€ãƒ–ãƒ«ã‚¿ãƒƒãƒ—å¤‰èº«
     for (const c of clouds) {
         if (Math.hypot(pos.x - c.x, pos.y - c.y) < 55) {
             if (nowTime - c.lastTapTime < 350) {
                 if (c.type === 'rain') {
                     c.type = 'thunder';
-                    addFloatText(c.x, c.y - 30, 'ƒJƒ~ƒiƒŠ‚®‚àI');
+                    addFloatText(c.x, c.y - 30, 'ã‚«ãƒŸãƒŠãƒªãã‚‚ï¼');
                 } else if (c.type === 'thunder') {
                     c.type = 'snow';
-                    addFloatText(c.x, c.y - 30, '‚ä‚«‚®‚àI');
+                    addFloatText(c.x, c.y - 30, 'ã‚†ããã‚‚ï¼');
                 } else {
                     c.type = 'rain';
-                    addFloatText(c.x, c.y - 30, '‚ ‚ß‚®‚àI');
+                    addFloatText(c.x, c.y - 30, 'ã‚ã‚ãã‚‚ï¼');
                 }
                 c.lastTapTime = 0;
             } else {
@@ -1141,7 +1139,7 @@ function handlePointerDown(e) {
         }
     }
 
-    // 3. •—‘D‚Ìƒ^ƒbƒvŠ„‚è
+    // 3. é¢¨èˆ¹ã®ã‚¿ãƒƒãƒ—å‰²ã‚Š
     for (const k of kobitos) {
         if (k.state === 'balloon') {
             const floatSwing = Math.sin(nowTime * 0.004 + (k.balloonSwing || 0)) * 6;
@@ -1163,7 +1161,7 @@ function handlePointerDown(e) {
                         decay: 0.045
                     });
                 }
-                addFloatText(balloonX, balloonY, 'ƒpƒ`ƒ“I');
+                addFloatText(balloonX, balloonY, 'ãƒ‘ãƒãƒ³ï¼');
 
                 k.state = 'walk';
                 k.stunTimer = 35;
@@ -1174,7 +1172,7 @@ function handlePointerDown(e) {
         }
     }
 
-    // 4. ¬l‚Ì‚Â‚Ü‚İã‚°
+    // 4. å°äººã®ã¤ã¾ã¿ä¸Šã’
     for (const k of kobitos) {
         if (Math.hypot(pos.x - k.position.x, pos.y - k.position.y) < 42) {
             draggedKobito = k;
@@ -1182,19 +1180,19 @@ function handlePointerDown(e) {
             kobitoDragOffset.x = k.position.x - pos.x;
             kobitoDragOffset.y = k.position.y - pos.y;
             Body.setVelocity(k, { x: 0, y: 0 });
-            addFloatText(k.position.x, k.position.y - 35, '‚í[‚ÁI');
+            addFloatText(k.position.x, k.position.y - 35, 'ã‚ãƒ¼ã£ï¼');
             isDrawing = false;
             return;
         }
     }
 
-    // 5. ‘¾—zƒ^ƒbƒv
+    // 5. å¤ªé™½ã‚¿ãƒƒãƒ—
     if (Math.hypot(pos.x - sun.x, pos.y - sun.y) < sun.radius + 15) {
         triggerSunLight();
         return;
     }
 
-    // 6. ¯ƒ^ƒbƒv
+    // 6. æ˜Ÿã‚¿ãƒƒãƒ—
     for (const s of stars) {
         if (Math.hypot(pos.x - s.x, pos.y - s.y) < s.radius + 15) {
             spawnStarBurst(s.x, s.y);
@@ -1202,16 +1200,16 @@ function handlePointerDown(e) {
         }
     }
 
-    // 7. ‹ƒ^ƒbƒv
+    // 7. ç‰›ã‚¿ãƒƒãƒ—
     for (const cow of cows) {
         if (Math.hypot(pos.x - cow.position.x, pos.y - cow.position.y) < 48) {
             Body.setVelocity(cow, { x: cow.direction * 3, y: -6 });
-            addFloatText(cow.position.x, cow.position.y - 35, 'ƒ‚ƒH?I');
+            addFloatText(cow.position.x, cow.position.y - 35, 'ãƒ¢ã‚©ã€œï¼');
             return;
         }
     }
 
-    // 8. ƒVƒƒƒ{ƒ“‹Êƒ^ƒbƒv
+    // 8. ã‚·ãƒ£ãƒœãƒ³ç‰ã‚¿ãƒƒãƒ—
     for (let i = bubbles.length - 1; i >= 0; i--) {
         const b = bubbles[i];
         if (Math.hypot(pos.x - b.x, pos.y - b.y) < b.radius + 15) {
@@ -1693,7 +1691,7 @@ function drawItem(b) {
         ctx.arc(-item.radius * 0.35, -item.radius * 0.35, item.radius * 0.28, 0, Math.PI * 2);
         ctx.fill();
 
-        // jˆø‚«ƒoƒgƒ‹’†‚Ì‰Ÿ‚µ‡‚¢ƒQ[ƒW
+        // ç¶±å¼•ããƒãƒˆãƒ«ä¸­ã®æŠ¼ã—åˆã„ã‚²ãƒ¼ã‚¸
         if (item.battle && item.battle.state === 'fighting') {
             ctx.restore();
             ctx.save();
@@ -1794,7 +1792,7 @@ function drawKobito(k, timestamp) {
         ctx.rotate(anim * 0.06);
     }
 
-    // •—‘D
+    // é¢¨èˆ¹
     if (k.state === 'balloon') {
         const balloonColor = k.balloonColor || '#FF4081';
         const floatSwing = Math.sin(timestamp * 0.004 + (k.balloonSwing || 0)) * 6;
@@ -1867,7 +1865,7 @@ function loop(timestamp) {
         ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(screenWidth, y); ctx.stroke();
     }
 
-    // ‚Ä‚ñ‚Ä‚ñ‘«Õ
+    // ã¦ã‚“ã¦ã‚“è¶³è·¡
     for (let i = footprints.length - 1; i >= 0; i--) {
         const fp = footprints[i];
         fp.life -= 0.007;
@@ -1883,7 +1881,7 @@ function loop(timestamp) {
         ctx.restore();
     }
 
-    // ”’‚¢’n–Êƒ‰ƒCƒ“
+    // ç™½ã„åœ°é¢ãƒ©ã‚¤ãƒ³
     ctx.save();
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
     ctx.lineWidth = 3.5;
@@ -1898,11 +1896,11 @@ function loop(timestamp) {
 
     updateWeather();
 
-    // ƒ`ƒ‡ƒEƒ`ƒ‡‚ÌXVE•`‰æ
+    // ãƒãƒ§ã‚¦ãƒãƒ§ã®æ›´æ–°ãƒ»æç”»
     updateButterflies();
     drawButterflies();
 
-    // ‰J
+    // é›¨
     ctx.strokeStyle = '#4FC3F7';
     ctx.lineWidth = 1.5;
     rainDrops.forEach(r => {
@@ -1912,7 +1910,7 @@ function loop(timestamp) {
         ctx.stroke();
     });
 
-    // á
+    // é›ª
     ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
     snowFlakes.forEach(s => {
         ctx.beginPath();
@@ -1920,7 +1918,7 @@ function loop(timestamp) {
         ctx.fill();
     });
 
-    // ƒJƒ~ƒiƒŠ
+    // ã‚«ãƒŸãƒŠãƒª
     lightnings.forEach(l => {
         ctx.save();
         ctx.strokeStyle = `rgba(255, 238, 88, ${l.life})`;
@@ -2024,7 +2022,7 @@ function loop(timestamp) {
         ctx.restore();
     }
 
-    // ƒZƒŠƒt•`‰æi”’•¶š“ˆê • 13pxj
+    // ã‚»ãƒªãƒ•æç”»ï¼ˆç™½æ–‡å­—çµ±ä¸€ ï¼† 13pxï¼‰
     for (let i = floatTexts.length - 1; i >= 0; i--) {
         const ft = floatTexts[i];
         ft.y -= 0.5;
