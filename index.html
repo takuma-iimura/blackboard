@@ -1,0 +1,2052 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>こびとの住まう黒板</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            background-color: #121316;
+            /* 背景画像パスを相対パスに変更 */
+            background-image: url("image/kokuban.jpg");
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            overflow: hidden;
+            font-family: "Hiragino Maru Gothic ProN", "Yu Gothic Rounded", -apple-system, BlinkMacSystemFont, sans-serif;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: none;
+        }
+        canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+            touch-action: none;
+            background: transparent;
+        }
+        #ui-container {
+            position: absolute;
+            top: 16px;
+            left: 16px;
+            display: flex;
+            gap: 12px;
+            z-index: 10;
+        }
+        .ui-btn {
+            background: rgba(28, 31, 38, 0.85);
+            backdrop-filter: blur(6px);
+            color: #ffffff;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 10px 18px;
+            border-radius: 20px;
+            font-size: 15px;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+            user-select: none;
+            transition: transform 0.1s, background 0.2s;
+        }
+        .ui-btn:active {
+            transform: scale(0.95);
+            background: rgba(45, 50, 62, 0.9);
+        }
+    </style>
+    <!-- Matter.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+</head>
+<body>
+
+<div id="ui-container">
+    <button id="btn-clear" class="ui-btn">?? ぜんぶけす</button>
+</div>
+
+<canvas id="gameCanvas"></canvas>
+
+<script>
+let Engine, World, Bodies, Body, Composite;
+let engine, world;
+let canvas, ctx;
+let screenWidth, screenHeight;
+
+let isDrawing = false;
+let lastPointerPos = null;
+let pointerMoved = false;
+let pointerStartPos = null;
+const LINE_THICKNESS = 4;
+
+// ドラッグ操作（雲 & 小人）
+let draggedCloud = null;
+let cloudDragOffset = { x: 0, y: 0 };
+let draggedKobito = null;
+let kobitoDragOffset = { x: 0, y: 0 };
+
+let rainbowChalkTimer = 0;
+let GROUND_Y = 0;
+
+const LINE_LIFETIME = 60 * 1000;
+const LINE_FADE_DURATION = 10 * 1000;
+
+let bubbles = [];
+let kobitos = [];
+let cows = [];
+let stars = [];
+let butterflies = [];
+let particles = [];
+let rainDrops = [];
+let snowFlakes = [];
+let lightnings = [];
+let footprints = [];
+let floatTexts = [];
+
+// ------------------------------
+// 小人画像（7種類）の相対パス設定
+// ------------------------------
+const KOBITO_IMAGES = [];
+const KOBITO_SOURCES = [
+    "image/kobito1.png",
+    "image/kobito2.png",
+    "image/kobito3.png",
+    "image/kobito4.png",
+    "image/kobito5.png",
+    "image/kobito6.png",
+    "image/kobito7.png"
+];
+
+KOBITO_SOURCES.forEach(src => {
+    const img = new Image();
+    img.src = src;
+    KOBITO_IMAGES.push(img);
+});
+
+// ------------------------------
+// 牛画像の相対パス設定
+// ------------------------------
+const cowImg = new Image();
+cowImg.src = "image/ushi.png";
+
+// 衝突カテゴリ
+const CATEGORY_DEFAULT = 0x0001; // 地面、線、アイテム
+const CATEGORY_KOBITO  = 0x0002; // こびと
+const CATEGORY_COW     = 0x0004; // 牛
+const CATEGORY_LADDER  = 0x0008; // 梯子
+
+const ITEM_TYPES = [
+    { type: 'seed',        label: 'タネ', radius: 10 },
+    { type: 'largeBall',   label: '大玉', color: '#FF5252', radius: 22 },
+    { type: 'ladderShort', label: '梯子', color: '#FFF9C4', width: 28, height: 85 },
+    { type: 'ladderLong',  label: 'ながい梯子', color: '#FFF9C4', width: 28, height: 165 },
+    { type: 'fireball',    label: '火の玉', color: '#FF3D00', radius: 16 },
+    { type: 'mushroom',    label: 'キノコ', color: '#FF1744', width: 44, height: 28 },
+    { type: 'cow',         label: '牛', color: '#FFFFFF', width: 96, height: 56 }
+];
+
+let sun = { x: 0, y: 0, radius: 38, flare: 0 };
+let clouds = [];
+
+function init() {
+    if (typeof Matter === 'undefined') return;
+
+    Engine = Matter.Engine;
+    World = Matter.World;
+    Bodies = Matter.Bodies;
+    Body = Matter.Body;
+    Composite = Matter.Composite;
+
+    canvas = document.getElementById('gameCanvas');
+    ctx = canvas.getContext('2d');
+
+    resize();
+    window.addEventListener('resize', resize);
+
+    engine = Engine.create({ gravity: { x: 0, y: 1.0 } });
+    world = engine.world;
+    createBoundaries();
+
+    setupSkyObjects();
+    setupButterflies();
+
+    document.getElementById('btn-clear').addEventListener('click', clearCanvas);
+
+    canvas.addEventListener('pointerdown', handlePointerDown);
+    canvas.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
+    window.addEventListener('pointercancel', handlePointerUp);
+
+    spawnBubble();
+    spawnStar();
+    spawnStar();
+    for (let i = 0; i < 3; i++) {
+        setTimeout(spawnKobito, i * 700);
+    }
+
+    setInterval(() => { if (bubbles.length < 3) spawnBubble(); }, 4500);
+    setInterval(() => { if (kobitos.length < 30) spawnKobito(); }, 3000);
+    setInterval(() => { if (stars.length < 3) spawnStar(); }, 7000);
+
+    setInterval(updateEntitiesAI, 50); 
+
+    requestAnimationFrame(loop);
+}
+
+function resize() {
+    screenWidth = window.innerWidth;
+    screenHeight = window.innerHeight;
+    canvas.width = screenWidth;
+    canvas.height = screenHeight;
+    GROUND_Y = screenHeight - 35;
+    setupSkyObjects();
+    if (world) createBoundaries();
+}
+
+function setupSkyObjects() {
+    sun.x = screenWidth - 110;
+    sun.y = 110;
+
+    clouds = [
+        { x: screenWidth * 0.25, y: 120, vx: 0.18, rainingTimer: 0, width: 85, type: 'rain', lastTapTime: 0, lightningTimer: 0 },
+        { x: screenWidth * 0.65, y: 95,  vx: -0.15, rainingTimer: 0, width: 95, type: 'rain', lastTapTime: 0, lightningTimer: 0 }
+    ];
+}
+
+function setupButterflies() {
+    butterflies = [
+        {
+            x: screenWidth * 0.4,
+            y: screenHeight * 0.5,
+            targetX: screenWidth * 0.5,
+            targetY: screenHeight * 0.5,
+            vx: 0, vy: 0,
+            flapAngle: 0,
+            restTimer: 0,
+            perchedOn: null
+        }
+    ];
+}
+
+function updateButterflies() {
+    butterflies.forEach(b => {
+        if (b.perchedOn) {
+            const k = b.perchedOn;
+            if (!kobitos.includes(k) || k.state !== 'walk') {
+                b.perchedOn = null;
+                b.restTimer = 0;
+            } else {
+                b.x = k.position.x;
+                b.y = k.position.y - 32;
+                b.flapAngle = 0.2;
+                b.restTimer--;
+                if (b.restTimer <= 0) {
+                    b.perchedOn = null;
+                    b.targetY = b.y - 80;
+                }
+                return;
+            }
+        }
+
+        if (Math.hypot(b.x - b.targetX, b.y - b.targetY) < 30 || Math.random() < 0.015) {
+            b.targetX = Math.random() * (screenWidth * 0.8) + screenWidth * 0.1;
+            b.targetY = Math.random() * (GROUND_Y - 140) + 90;
+        }
+
+        const ax = (b.targetX - b.x) * 0.0015;
+        const ay = (b.targetY - b.y) * 0.0015;
+        b.vx = (b.vx + ax) * 0.96;
+        b.vy = (b.vy + ay) * 0.96;
+
+        b.x += b.vx + (Math.random() - 0.5) * 0.8;
+        b.y += b.vy + Math.sin(performance.now() * 0.006) * 0.7;
+
+        b.flapAngle = Math.sin(performance.now() * 0.018);
+
+        if (Math.random() < 0.25) {
+            particles.push({
+                x: b.x, y: b.y,
+                vx: -b.vx * 0.3,
+                vy: Math.random() * 0.5,
+                size: 1.8,
+                color: 'rgba(255, 255, 255, 0.6)',
+                life: 0.5,
+                decay: 0.03
+            });
+        }
+
+        if (b.y > GROUND_Y - 90) {
+            kobitos.forEach(k => {
+                if (k.state === 'walk' && Math.hypot(k.position.x - b.x, k.position.y - b.y) < 55) {
+                    if (Math.random() < 0.03 && !b.perchedOn) {
+                        b.perchedOn = k;
+                        b.restTimer = 70;
+                        addFloatText(k.position.x, k.position.y - 35, '♪');
+                    } else if (Math.random() < 0.02) {
+                        addFloatText(k.position.x, k.position.y - 35, 'ちょうちょ！');
+                    }
+                }
+            });
+        }
+    });
+}
+
+function drawButterflies() {
+    butterflies.forEach(b => {
+        ctx.save();
+        ctx.translate(b.x, b.y);
+
+        if (b.vx < -0.1) ctx.scale(-1, 1);
+
+        const wingScaleX = Math.cos(b.flapAngle);
+
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
+        ctx.lineWidth = 1.5;
+
+        ctx.save();
+        ctx.scale(wingScaleX, 1);
+        ctx.beginPath();
+        ctx.ellipse(-7, -4, 7, 10, -0.4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.ellipse(-5, 4, 5, 7, 0.4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+
+        ctx.fillStyle = '#FFFFFF';
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 1.5, 6, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.restore();
+    });
+}
+
+function spawnStar() {
+    if (stars.length >= 4) return;
+    const isFromLeft = Math.random() > 0.5;
+    const startX = isFromLeft ? -30 : screenWidth + 30;
+    const y = Math.random() * 110 + 45;
+    const vx = (isFromLeft ? 1 : -1) * (Math.random() * 0.08 + 0.14);
+
+    stars.push({
+        x: startX,
+        y: y,
+        vx: vx,
+        radius: Math.random() * 3 + 14,
+        pulseOffset: Math.random() * 100
+    });
+}
+
+let ground;
+function createBoundaries() {
+    if (ground) World.remove(world, ground);
+
+    ground = Bodies.rectangle(screenWidth / 2, GROUND_Y + 25, screenWidth * 3, 50, {
+        isStatic: true, friction: 0.8, restitution: 0.1,
+        collisionFilter: { category: CATEGORY_DEFAULT, mask: 0xFFFF }
+    });
+
+    World.add(world, ground);
+}
+
+// ------------------------------
+// こびと & 牛の生成・AI
+// ------------------------------
+function spawnKobito() {
+    if (kobitos.length >= 30) return;
+
+    const isFromLeft = Math.random() > 0.5;
+    const startX = isFromLeft ? 20 : screenWidth - 20;
+    const startY = GROUND_Y - 30;
+
+    const body = Bodies.rectangle(startX, startY, 28, 52, {
+        friction: 0.1,
+        frictionAir: 0.02,
+        restitution: 0.0,
+        density: 0.002,
+        collisionFilter: { category: CATEGORY_KOBITO, mask: CATEGORY_DEFAULT }
+    });
+    
+    body.isKobito = true;
+    body.direction = isFromLeft ? 1 : -1;
+    body.imageIndex = Math.floor(Math.random() * KOBITO_IMAGES.length);
+    body.color = ['#FF5252', '#00E676', '#00E5FF', '#FFD600', '#FF4081', '#B388FF'][Math.floor(Math.random() * 6)];
+    body.state = 'walk';
+    body.eatingTimer = 0;
+    body.stunTimer = 0;
+    body.walkAnimPhase = Math.random() * Math.PI * 2;
+    body.ballRideTimer = 0;
+    body.footprintStep = 0;
+
+    kobitos.push(body);
+    World.add(world, body);
+}
+
+function spawnCow(x, y, dir) {
+    const direction = (dir !== undefined) ? dir : (Math.random() > 0.5 ? 1 : -1);
+
+    const body = Bodies.rectangle(x, y, 96, 56, {
+        friction: 0.1,
+        frictionAir: 0.02,
+        restitution: 0.1,
+        density: 0.02,
+        collisionFilter: { category: CATEGORY_COW, mask: CATEGORY_DEFAULT }
+    });
+
+    body.isCow = true;
+    body.direction = direction;
+    cows.push(body);
+    World.add(world, body);
+
+    addFloatText(x, y - 35, 'モォ?！');
+}
+
+function triggerSunLight() {
+    sun.flare = 1.0;
+    rainbowChalkTimer = performance.now() + 10 * 1000;
+    addFloatText(sun.x, sun.y + 45, 'にじいろチョーク！');
+
+    const allBodies = Composite.allBodies(world);
+    const seeds = allBodies.filter(b => b.customItem && b.customItem.type === 'seed');
+
+    seeds.forEach(s => {
+        if (s.customItem.stage < 3) {
+            s.customItem.stage++;
+            addFloatText(s.position.x, s.position.y - 25, 'ぐんぐん！');
+            for (let i = 0; i < 8; i++) {
+                particles.push({
+                    x: s.position.x, y: s.position.y,
+                    vx: (Math.random() - 0.5) * 3, vy: -Math.random() * 3 - 1,
+                    size: 3, color: '#FFEE58', life: 0.8, decay: 0.04
+                });
+            }
+        }
+    });
+
+    kobitos.forEach(k => {
+        if (Math.random() < 0.4) {
+            addFloatText(k.position.x, k.position.y - 35, 'ぽかぽか?');
+        }
+    });
+}
+
+function distToSegment(px, py, x1, y1, x2, y2) {
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const l2 = dx * dx + dy * dy;
+    if (l2 === 0) return Math.hypot(px - x1, py - y1);
+    let t = ((px - x1) * dx + (py - y1) * dy) / l2;
+    t = Math.max(0, Math.min(1, t));
+    return Math.hypot(px - (x1 + t * dx), py - (y1 + t * dy));
+}
+
+function updateEntitiesAI() {
+    const allBodies   = Composite.allBodies(world);
+    const ladders     = allBodies.filter(b => b.customItem && (b.customItem.type === 'ladderShort' || b.customItem.type === 'ladderLong'));
+    const berries     = allBodies.filter(b => b.customItem && b.customItem.type === 'seed' && b.customItem.stage >= 3);
+    const fireballs   = allBodies.filter(b => b.customItem && b.customItem.type === 'fireball');
+    const mushrooms   = allBodies.filter(b => b.customItem && b.customItem.type === 'mushroom');
+    const seeds       = allBodies.filter(b => b.customItem && b.customItem.type === 'seed');
+    const largeBalls  = allBodies.filter(b => b.customItem && b.customItem.type === 'largeBall');
+    const customLines = allBodies.filter(b => b.isCustomLine);
+
+    // タネの根張り
+    seeds.forEach(s => {
+        if (!s.customItem.isRooted) {
+            if (s.position.y >= GROUND_Y - 12 || (Math.abs(s.velocity.y) < 0.15 && Math.abs(s.velocity.x) < 0.15 && s.position.y > 150)) {
+                s.customItem.isRooted = true;
+                Body.setStatic(s, true);
+                Body.setVelocity(s, { x: 0, y: 0 });
+                Body.setAngularVelocity(s, 0);
+                s.collisionFilter.mask = 0;
+            }
+        }
+    });
+
+    // 牛のAI
+    cows.forEach(c => {
+        Body.setVelocity(c, { x: 3.2 * c.direction, y: c.velocity.y });
+
+        if (Math.abs(c.angle) > 0.35) {
+            Body.setAngle(c, 0);
+            Body.setAngularVelocity(c, 0);
+        }
+
+        if (Math.random() < 0.65) {
+            particles.push({
+                x: c.position.x - c.direction * 38,
+                y: c.position.y + 24,
+                vx: -c.direction * (Math.random() * 1.8 + 0.5),
+                vy: -Math.random() * 1.5 - 0.5,
+                size: Math.random() * 4 + 3,
+                color: 'rgba(255, 255, 255, 0.45)',
+                life: 0.6,
+                decay: 0.03
+            });
+        }
+
+        if (c.position.x < -160 || c.position.x > screenWidth + 160) {
+            c.toRemove = true;
+        }
+    });
+
+    const cowRemoves = cows.filter(c => c.toRemove);
+    cowRemoves.forEach(c => World.remove(world, c));
+    cows = cows.filter(c => !c.toRemove);
+
+    // 画面外アイテム消滅
+    allBodies.forEach(b => {
+        if (b.customItem) {
+            if (b.position.x < -120 || b.position.x > screenWidth + 120 || b.position.y > screenHeight + 100) {
+                World.remove(world, b);
+            }
+        }
+    });
+
+    // 大玉の押し合い綱引きバトル
+    largeBalls.forEach(ball => {
+        if (!ball.customItem.battle) {
+            ball.customItem.battle = {
+                state: 'idle',
+                pushTimer: 0,
+                startX: ball.position.x,
+                fightTimer: 0
+            };
+        }
+
+        const b = ball.customItem.battle;
+        const leftPushers = kobitos.filter(k => k.state === 'walk' && k.direction === 1 && (ball.position.x - k.position.x) > 12 && (ball.position.x - k.position.x) < 48 && Math.abs(k.position.y - ball.position.y) < 35);
+        const rightPushers = kobitos.filter(k => k.state === 'walk' && k.direction === -1 && (k.position.x - ball.position.x) > 12 && (k.position.x - ball.position.x) < 48 && Math.abs(k.position.y - ball.position.y) < 35);
+
+        if (b.state === 'idle') {
+            if (leftPushers.length > 0 && rightPushers.length > 0) {
+                b.pushTimer++;
+                if (b.pushTimer > 18) {
+                    b.state = 'ready';
+                    b.pushTimer = 0;
+                    b.startX = ball.position.x;
+                    b.fightTimer = 0;
+                    addFloatText(ball.position.x, ball.position.y - 45, 'READY... GO!');
+                }
+            } else {
+                b.pushTimer = Math.max(0, b.pushTimer - 1);
+            }
+        } else if (b.state === 'ready') {
+            b.fightTimer++;
+            if (b.fightTimer > 20) {
+                b.state = 'fighting';
+                b.fightTimer = 0;
+            }
+        } else if (b.state === 'fighting') {
+            b.fightTimer++;
+
+            const forceDiff = (leftPushers.length - rightPushers.length);
+            const moveSpeed = forceDiff * 1.6;
+            Body.setVelocity(ball, { x: moveSpeed, y: ball.velocity.y });
+
+            if (b.fightTimer % 20 === 0) {
+                if (Math.random() < 0.5) {
+                    addFloatText(ball.position.x - 30, ball.position.y - 35, 'ぐぬぬ…');
+                } else {
+                    addFloatText(ball.position.x + 30, ball.position.y - 35, 'おせおせ?！');
+                }
+            }
+
+            const distanceMoved = ball.position.x - b.startX;
+            let winner = null;
+
+            if (distanceMoved > 75) {
+                winner = 'left';
+            } else if (distanceMoved < -75) {
+                winner = 'right';
+            } else if (b.fightTimer > 160) {
+                winner = distanceMoved >= 0 ? 'left' : 'right';
+            }
+
+            if (winner) {
+                b.state = 'idle';
+
+                if (winner === 'left') {
+                    addFloatText(ball.position.x, ball.position.y - 50, 'ひだりチームのかち！');
+                    leftPushers.forEach(k => {
+                        Body.setVelocity(k, { x: 0, y: -7.5 });
+                        addFloatText(k.position.x, k.position.y - 35, 'やったー！');
+                    });
+                    rightPushers.forEach(k => {
+                        Body.setVelocity(k, { x: 4.0, y: -4.5 });
+                        k.stunTimer = 25;
+                        addFloatText(k.position.x, k.position.y - 35, 'ズコッ！');
+                    });
+                } else {
+                    addFloatText(ball.position.x, ball.position.y - 50, 'みぎチームのかち！');
+                    rightPushers.forEach(k => {
+                        Body.setVelocity(k, { x: 0, y: -7.5 });
+                        addFloatText(k.position.x, k.position.y - 35, 'やったー！');
+                    });
+                    leftPushers.forEach(k => {
+                        Body.setVelocity(k, { x: -4.0, y: -4.5 });
+                        k.stunTimer = 25;
+                        addFloatText(k.position.x, k.position.y - 35, 'ズコッ！');
+                    });
+                }
+
+                for (let i = 0; i < 20; i++) {
+                    const angle = Math.random() * Math.PI * 2;
+                    const spd = Math.random() * 4 + 2;
+                    particles.push({
+                        x: ball.position.x, y: ball.position.y,
+                        vx: Math.cos(angle) * spd,
+                        vy: Math.sin(angle) * spd - 2,
+                        size: 3.5,
+                        color: ['#FFFFFF', '#FFEE58', '#80D8FF'][Math.floor(Math.random() * 3)],
+                        life: 1.0,
+                        decay: 0.03
+                    });
+                }
+
+                World.remove(world, ball);
+            }
+        }
+    });
+
+    // こびとのAI
+    const nowTime = performance.now();
+    kobitos.forEach(k => {
+        if (k === draggedKobito) return;
+
+        // 風船で上昇中
+        if (k.state === 'balloon') {
+            Body.setVelocity(k, {
+                x: Math.sin(nowTime * 0.003 + k.balloonSwing) * 0.9 + k.direction * 0.4,
+                y: -1.3
+            });
+
+            for (let i = bubbles.length - 1; i >= 0; i--) {
+                const b = bubbles[i];
+                if (Math.hypot(k.position.x - b.x, (k.position.y - 45) - b.y) < b.radius + 25) {
+                    addFloatText(k.position.x, k.position.y - 30, 'えいっ！');
+                    popBubble(i);
+                }
+            }
+
+            for (const s of stars) {
+                if (Math.hypot(k.position.x - s.x, (k.position.y - 45) - s.y) < s.radius + 25) {
+                    spawnStarBurst(s.x, s.y);
+                    addFloatText(k.position.x, k.position.y - 30, 'キラキラ?');
+                }
+            }
+
+            for (const c of clouds) {
+                if (Math.hypot(k.position.x - c.x, (k.position.y - 45) - c.y) < 55) {
+                    c.rainingTimer = 100;
+                    k.state = 'walk';
+                    k.stunTimer = 25;
+                    addFloatText(k.position.x, k.position.y - 30, 'パチン！');
+                    break;
+                }
+            }
+
+            if (k.position.y < -80) {
+                k.toRemove = true;
+            }
+            return;
+        }
+
+        // 大玉乗り
+        if (k.state === 'ballRide') {
+            const ball = k.ridingBall;
+            if (!ball || !world.bodies.includes(ball)) {
+                k.state = 'walk';
+            } else {
+                Body.setPosition(k, { x: ball.position.x, y: ball.position.y - 48 });
+                Body.setVelocity(ball, { x: 2.2 * k.direction, y: ball.velocity.y });
+                Body.setVelocity(k, { x: ball.velocity.x, y: ball.velocity.y });
+
+                k.ballRideTimer--;
+                if (k.ballRideTimer <= 0) {
+                    k.state = 'walk';
+                    k.stunTimer = 15;
+                    Body.setVelocity(k, { x: k.direction * 3, y: -6 });
+                    addFloatText(k.position.x, k.position.y - 35, 'ジャンプ！');
+                }
+                return;
+            }
+        }
+
+        // お尻ですべり台
+        const footX = k.position.x;
+        const footY = k.position.y + 24;
+        let currentSlopeLine = null;
+        let isDownhill = false;
+        let slopeRad = 0;
+
+        for (const line of customLines) {
+            if (!line.p1 || !line.p2) continue;
+
+            const dist = distToSegment(footX, footY, line.p1.x, line.p1.y, line.p2.x, line.p2.y);
+            if (dist < 24) {
+                let x1 = line.p1.x, y1 = line.p1.y, x2 = line.p2.x, y2 = line.p2.y;
+                if (x1 > x2) {
+                    x1 = line.p2.x; y1 = line.p2.y; x2 = line.p1.x; y2 = line.p1.y;
+                }
+
+                const dx = x2 - x1;
+                const dy = y2 - y1;
+                const slope = dy / (Math.abs(dx) < 0.001 ? 0.001 : dx);
+
+                if (Math.abs(slope) >= 0.35 && Math.abs(slope) <= 3.8) {
+                    if ((k.direction === 1 && slope > 0) || (k.direction === -1 && slope < 0)) {
+                        currentSlopeLine = line;
+                        isDownhill = true;
+                        slopeRad = Math.atan(slope);
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (isDownhill && currentSlopeLine) {
+            k.state = 'slide';
+
+            const speed = 5.6;
+            const vx = (k.direction === 1 ? Math.cos(slopeRad) : -Math.cos(slopeRad)) * speed;
+            const vy = Math.abs(Math.sin(slopeRad)) * speed + 1.2;
+
+            Body.setVelocity(k, { x: vx, y: vy });
+
+            if (Math.random() < 0.6) {
+                particles.push({
+                    x: k.position.x - k.direction * 14,
+                    y: k.position.y + 24,
+                    vx: -k.direction * (Math.random() * 2 + 1),
+                    vy: -Math.random() * 1.5,
+                    size: Math.random() * 3 + 2,
+                    color: '#FFFFFF',
+                    life: 0.5,
+                    decay: 0.04
+                });
+            }
+            return;
+        } else if (k.state === 'slide') {
+            k.state = 'walk';
+            k.stunTimer = 25;
+            Body.setVelocity(k, { x: k.direction * 6.2, y: -6.8 });
+            addFloatText(k.position.x, k.position.y - 35, 'キャーッ！');
+            return;
+        }
+
+        if (k.stunTimer > 0) {
+            k.stunTimer--;
+            if (k.stunTimer === 0) {
+                Body.setAngle(k, 0);
+                Body.setAngularVelocity(k, 0);
+                k.state = 'walk';
+            }
+            return;
+        }
+
+        // イチゴを食べる ? 風船
+        if (k.state === 'eat') {
+            Body.setVelocity(k, { x: 0, y: k.velocity.y });
+            k.eatingTimer--;
+            if (k.eatingTimer <= 0) {
+                k.state = 'balloon';
+                k.balloonColor = ['#FF4081', '#00E5FF', '#FFD600', '#76FF03', '#E040FB'][Math.floor(Math.random() * 5)];
+                k.balloonSwing = Math.random() * 100;
+                addFloatText(k.position.x, k.position.y - 35, 'ふうせん?');
+            }
+            return;
+        }
+
+        // 大玉乗り判定
+        for (const ball of largeBalls) {
+            if (!ball.customItem.battle || ball.customItem.battle.state === 'idle') {
+                const dx = Math.abs(k.position.x - ball.position.x);
+                const dy = k.position.y - ball.position.y;
+                if (dx < 18 && dy < -22 && dy > -56) {
+                    k.state = 'ballRide';
+                    k.ridingBall = ball;
+                    k.ballRideTimer = 100;
+                    addFloatText(k.position.x, k.position.y - 45, 'おっとっと！');
+                    return;
+                }
+            }
+        }
+
+        // 牛との接触
+        for (const cow of cows) {
+            const dx = Math.abs(k.position.x - cow.position.x);
+            const dy = Math.abs(k.position.y - cow.position.y);
+            if (dx < 68 && dy < 50) {
+                k.stunTimer = 50;
+                const dir = cow.direction;
+                Body.setVelocity(k, { x: dir * (Math.random() * 4 + 7), y: -11.5 });
+                Body.setAngularVelocity(k, dir * 0.4);
+                addFloatText(k.position.x, k.position.y - 35, 'わーっ！');
+                return;
+            }
+        }
+
+        // 火の玉との接触
+        for (const fb of fireballs) {
+            if (Math.hypot(k.position.x - fb.position.x, k.position.y - fb.position.y) < 34) {
+                k.stunTimer = 40;
+                const bounceDir = k.position.x > fb.position.x ? 1 : -1;
+                Body.setVelocity(k, { x: bounceDir * (Math.random() * 3 + 4), y: -8 });
+                Body.setAngularVelocity(k, bounceDir * 0.3);
+                addFloatText(k.position.x, k.position.y - 35, 'アチッ！');
+                for (let i = 0; i < 6; i++) {
+                    particles.push({
+                        x: k.position.x, y: k.position.y,
+                        vx: (Math.random() - 0.5) * 4, vy: -Math.random() * 4,
+                        size: 3, color: '#FF7043', life: 1.0, decay: 0.05
+                    });
+                }
+                return;
+            }
+        }
+
+        // キノコとの接触
+        for (const m of mushrooms) {
+            const dist = Math.hypot(k.position.x - m.position.x, k.position.y - m.position.y);
+            if (dist < 46) {
+                k.stunTimer = 35;
+                m.customItem.squish = 1.0;
+                Body.setVelocity(k, { x: k.direction * 4.2, y: -14.5 });
+                addFloatText(k.position.x, k.position.y - 35, 'ピョーン！');
+
+                m.customItem.jumpCount = (m.customItem.jumpCount || 0) + 1;
+                if (m.customItem.jumpCount >= 4) {
+                    for (let i = 0; i < 14; i++) {
+                        const angle = Math.random() * Math.PI * 2;
+                        const spd = Math.random() * 3.5 + 1.5;
+                        particles.push({
+                            x: m.position.x, y: m.position.y,
+                            vx: Math.cos(angle) * spd,
+                            vy: Math.sin(angle) * spd,
+                            size: Math.random() * 4 + 3,
+                            color: '#FFF9C4',
+                            life: 1.0,
+                            decay: 0.04
+                        });
+                    }
+                    addFloatText(m.position.x, m.position.y - 25, 'ポンッ！');
+                    World.remove(world, m);
+                }
+                return;
+            }
+        }
+
+        // 雲・星到達判定
+        clouds.forEach(c => {
+            if (Math.hypot(k.position.x - c.x, k.position.y - c.y) < 65) {
+                c.rainingTimer = 80;
+            }
+        });
+        stars.forEach(s => {
+            if (Math.hypot(k.position.x - s.x, k.position.y - s.y) < 45) {
+                spawnStarBurst(s.x, s.y);
+            }
+        });
+
+        // イチゴを食べる
+        for (const b of berries) {
+            if (Math.hypot(k.position.x - b.position.x, k.position.y - b.position.y) < 32) {
+                k.state = 'eat';
+                k.eatingTimer = 40;
+                addFloatText(b.position.x, b.position.y - 20, 'もぐもぐ');
+                World.remove(world, b);
+                break;
+            }
+        }
+        if (k.state === 'eat') return;
+
+        // 梯子を登る
+        let onLadder = null;
+        for (const lad of ladders) {
+            const dx = Math.abs(k.position.x - lad.position.x);
+            const halfH = lad.customItem.height / 2;
+            const topY = lad.position.y - halfH;
+            const bottomY = lad.position.y + halfH;
+            if (dx < 25 && k.position.y >= topY - 15 && k.position.y <= bottomY + 25) {
+                onLadder = lad;
+                break;
+            }
+        }
+
+        if (onLadder) {
+            k.state = 'climb';
+            const topY = onLadder.position.y - onLadder.customItem.height / 2;
+            if (k.position.y > topY + 5) {
+                Body.setVelocity(k, { x: 0, y: -3.2 });
+            } else {
+                Body.setVelocity(k, { x: k.direction * 2.2, y: -3.5 });
+                k.state = 'walk';
+
+                onLadder.customItem.climbCount = (onLadder.customItem.climbCount || 0) + 1;
+                if (onLadder.customItem.climbCount >= 10) {
+                    for (let i = 0; i < 16; i++) {
+                        const angle = Math.random() * Math.PI * 2;
+                        const spd = Math.random() * 3 + 1;
+                        particles.push({
+                            x: onLadder.position.x, y: onLadder.position.y,
+                            vx: Math.cos(angle) * spd,
+                            vy: Math.sin(angle) * spd,
+                            size: Math.random() * 4 + 3,
+                            color: '#FFF9C4',
+                            life: 1.0,
+                            decay: 0.04
+                        });
+                    }
+                    addFloatText(onLadder.position.x, onLadder.position.y - 20, 'パッ！');
+                    World.remove(world, onLadder);
+                }
+            }
+        } else {
+            // 通常歩行
+            k.state = 'walk';
+            Body.setVelocity(k, { x: 1.2 * k.direction, y: k.velocity.y });
+
+            k.footprintStep++;
+            if (k.footprintStep % 10 === 0 && k.position.y > GROUND_Y - 45) {
+                footprints.push({
+                    x: k.position.x - k.direction * 6,
+                    y: GROUND_Y - 2,
+                    life: 1.0
+                });
+            }
+        }
+
+        if (Math.abs(k.angle) > 0.25) {
+            Body.setAngle(k, 0);
+            Body.setAngularVelocity(k, 0);
+        }
+
+        if (k.position.x < -80 || k.position.x > screenWidth + 80) {
+            k.toRemove = true;
+        }
+    });
+
+    const removeList = kobitos.filter(k => k.toRemove);
+    removeList.forEach(k => World.remove(world, k));
+    kobitos = kobitos.filter(k => !k.toRemove);
+}
+
+// ------------------------------
+// 天候・演出
+// ------------------------------
+function makeWeather(cloud) {
+    if (cloud.type === 'rain') {
+        for (let i = 0; i < 2; i++) {
+            rainDrops.push({
+                x: cloud.x + (Math.random() - 0.5) * (cloud.width * 0.8),
+                y: cloud.y + 20,
+                vy: Math.random() * 4 + 7,
+                length: Math.random() * 8 + 10
+            });
+        }
+    } else if (cloud.type === 'snow') {
+        for (let i = 0; i < 2; i++) {
+            snowFlakes.push({
+                x: cloud.x + (Math.random() - 0.5) * (cloud.width * 0.8),
+                y: cloud.y + 20,
+                vx: (Math.random() - 0.5) * 0.5,
+                vy: Math.random() * 1.5 + 1.2,
+                size: Math.random() * 2.5 + 2,
+                swing: Math.random() * 100
+            });
+        }
+    }
+}
+
+function updateWeather() {
+    const allBodies = Composite.allBodies(world);
+    const seeds     = allBodies.filter(b => b.customItem && b.customItem.type === 'seed');
+    const fireballs = allBodies.filter(b => b.customItem && b.customItem.type === 'fireball');
+
+    // 1. 雨
+    for (let i = rainDrops.length - 1; i >= 0; i--) {
+        const r = rainDrops[i];
+        r.y += r.vy;
+
+        for (const s of seeds) {
+            if (s.customItem.stage < 3 && Math.hypot(r.x - s.position.x, r.y - s.position.y) < 22) {
+                s.customItem.rainHits = (s.customItem.rainHits || 0) + 1;
+                if (s.customItem.rainHits % 5 === 0) {
+                    s.customItem.stage++;
+                    addFloatText(s.position.x, s.position.y - 20, 'すくすく…');
+                }
+                rainDrops.splice(i, 1);
+                continue;
+            }
+        }
+
+        for (const fb of fireballs) {
+            if (Math.hypot(r.x - fb.position.x, r.y - fb.position.y) < fb.customItem.radius + 8) {
+                fb.customItem.waterHits = (fb.customItem.waterHits || 0) + 1;
+                particles.push({
+                    x: fb.position.x + (Math.random() - 0.5) * 10,
+                    y: fb.position.y - 12,
+                    vx: (Math.random() - 0.5) * 2,
+                    vy: -Math.random() * 2 - 1,
+                    size: 4,
+                    color: 'rgba(255, 255, 255, 0.7)',
+                    life: 0.7,
+                    decay: 0.04
+                });
+
+                if (fb.customItem.waterHits >= 3) {
+                    fb.customItem.type = 'largeBall';
+                    fb.customItem.label = '大玉';
+                    fb.customItem.color = '#FF5252';
+                    fb.customItem.radius = 22;
+                    addFloatText(fb.position.x, fb.position.y - 25, 'シュ?ッ！');
+                }
+
+                rainDrops.splice(i, 1);
+                continue;
+            }
+        }
+
+        if (r.y > GROUND_Y) {
+            rainDrops.splice(i, 1);
+        }
+    }
+
+    // 2. 雪
+    const nowTime = performance.now();
+    for (let i = snowFlakes.length - 1; i >= 0; i--) {
+        const s = snowFlakes[i];
+        s.y += s.vy;
+        s.x += s.vx + Math.sin(nowTime * 0.003 + s.swing) * 0.6;
+
+        if (s.y > GROUND_Y) {
+            snowFlakes.splice(i, 1);
+        }
+    }
+
+    // 3. カミナリ
+    clouds.forEach(c => {
+        if (c.type === 'thunder' && c.rainingTimer > 0) {
+            c.lightningTimer = (c.lightningTimer || 0) + 1;
+            if (c.lightningTimer % 45 === 0) {
+                const lx = c.x + (Math.random() - 0.5) * 40;
+                lightnings.push({
+                    startX: lx,
+                    startY: c.y + 20,
+                    endX: lx + (Math.random() - 0.5) * 60,
+                    endY: GROUND_Y,
+                    life: 1.0
+                });
+
+                kobitos.forEach(k => {
+                    if (Math.abs(k.position.x - lx) < 90) {
+                        addFloatText(k.position.x, k.position.y - 35, 'にげろ?！');
+                        Body.setVelocity(k, { x: k.direction * 3.6, y: -4.5 });
+                    }
+                });
+            }
+        }
+    });
+
+    for (let i = lightnings.length - 1; i >= 0; i--) {
+        lightnings[i].life -= 0.15;
+        if (lightnings[i].life <= 0) lightnings.splice(i, 1);
+    }
+}
+
+function spawnStarBurst(x, y) {
+    rainbowChalkTimer = performance.now() + 10 * 1000;
+    addFloatText(x, y - 25, 'にじいろチョーク！');
+
+    for (let i = 0; i < 16; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = Math.random() * 5 + 2;
+        particles.push({
+            x: x, y: y,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            size: Math.random() * 4 + 3,
+            color: ['#FFD600', '#FFF59D', '#00E5FF', '#FFFFFF'][Math.floor(Math.random() * 4)],
+            life: 1.0,
+            decay: 0.03 + 0.02
+        });
+    }
+}
+
+function addFloatText(x, y, text) {
+    floatTexts.push({ x: x, y: y, text: text, color: '#FFFFFF', life: 1.0 });
+}
+
+// ------------------------------
+// 入力 & 操作
+// ------------------------------
+function handlePointerDown(e) {
+    const rect = canvas.getBoundingClientRect();
+    const pos = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    pointerStartPos = pos;
+    pointerMoved = false;
+
+    const isUI = Array.from(document.querySelectorAll('.ui-btn')).some(btn => {
+        const r = btn.getBoundingClientRect();
+        return (pos.x >= r.left && pos.x <= r.right && pos.y >= r.top && pos.y <= r.bottom);
+    });
+    if (isUI) return;
+
+    const nowTime = performance.now();
+
+    // 1. チョウチョタップ
+    for (const b of butterflies) {
+        if (Math.hypot(pos.x - b.x, pos.y - b.y) < 36) {
+            b.targetY = b.y - 100;
+            b.targetX = (Math.random() - 0.5) * screenWidth + b.x;
+            b.vy = -3.5;
+            b.perchedOn = null;
+            addFloatText(b.x, b.y - 20, 'ヒラリ?');
+            isDrawing = false;
+            return;
+        }
+    }
+
+    // 2. 雲のタップ & ダブルタップ変身
+    for (const c of clouds) {
+        if (Math.hypot(pos.x - c.x, pos.y - c.y) < 55) {
+            if (nowTime - c.lastTapTime < 350) {
+                if (c.type === 'rain') {
+                    c.type = 'thunder';
+                    addFloatText(c.x, c.y - 30, 'カミナリぐも！');
+                } else if (c.type === 'thunder') {
+                    c.type = 'snow';
+                    addFloatText(c.x, c.y - 30, 'ゆきぐも！');
+                } else {
+                    c.type = 'rain';
+                    addFloatText(c.x, c.y - 30, 'あめぐも！');
+                }
+                c.lastTapTime = 0;
+            } else {
+                c.lastTapTime = nowTime;
+            }
+
+            draggedCloud = c;
+            cloudDragOffset.x = c.x - pos.x;
+            cloudDragOffset.y = c.y - pos.y;
+            c.rainingTimer = 120;
+            isDrawing = false;
+            return;
+        }
+    }
+
+    // 3. 風船のタップ割り
+    for (const k of kobitos) {
+        if (k.state === 'balloon') {
+            const floatSwing = Math.sin(nowTime * 0.004 + (k.balloonSwing || 0)) * 6;
+            const balloonX = k.position.x + floatSwing;
+            const balloonY = k.position.y - 69;
+
+            if (Math.hypot(pos.x - balloonX, pos.y - balloonY) < 32) {
+                const bColor = k.balloonColor || '#FF4081';
+                for (let i = 0; i < 12; i++) {
+                    const angle = Math.random() * Math.PI * 2;
+                    const spd = Math.random() * 4 + 2;
+                    particles.push({
+                        x: balloonX, y: balloonY,
+                        vx: Math.cos(angle) * spd,
+                        vy: Math.sin(angle) * spd,
+                        size: Math.random() * 3 + 2,
+                        color: bColor,
+                        life: 1.0,
+                        decay: 0.045
+                    });
+                }
+                addFloatText(balloonX, balloonY, 'パチン！');
+
+                k.state = 'walk';
+                k.stunTimer = 35;
+                Body.setVelocity(k, { x: k.velocity.x * 0.3, y: 1.0 });
+                isDrawing = false;
+                return;
+            }
+        }
+    }
+
+    // 4. 小人のつまみ上げ
+    for (const k of kobitos) {
+        if (Math.hypot(pos.x - k.position.x, pos.y - k.position.y) < 42) {
+            draggedKobito = k;
+            k.state = 'grabbed';
+            kobitoDragOffset.x = k.position.x - pos.x;
+            kobitoDragOffset.y = k.position.y - pos.y;
+            Body.setVelocity(k, { x: 0, y: 0 });
+            addFloatText(k.position.x, k.position.y - 35, 'わーっ！');
+            isDrawing = false;
+            return;
+        }
+    }
+
+    // 5. 太陽タップ
+    if (Math.hypot(pos.x - sun.x, pos.y - sun.y) < sun.radius + 15) {
+        triggerSunLight();
+        return;
+    }
+
+    // 6. 星タップ
+    for (const s of stars) {
+        if (Math.hypot(pos.x - s.x, pos.y - s.y) < s.radius + 15) {
+            spawnStarBurst(s.x, s.y);
+            return;
+        }
+    }
+
+    // 7. 牛タップ
+    for (const cow of cows) {
+        if (Math.hypot(pos.x - cow.position.x, pos.y - cow.position.y) < 48) {
+            Body.setVelocity(cow, { x: cow.direction * 3, y: -6 });
+            addFloatText(cow.position.x, cow.position.y - 35, 'モォ?！');
+            return;
+        }
+    }
+
+    // 8. シャボン玉タップ
+    for (let i = bubbles.length - 1; i >= 0; i--) {
+        const b = bubbles[i];
+        if (Math.hypot(pos.x - b.x, pos.y - b.y) < b.radius + 15) {
+            popBubble(i);
+            return;
+        }
+    }
+
+    isDrawing = true;
+    lastPointerPos = pos;
+}
+
+function handlePointerMove(e) {
+    const rect = canvas.getBoundingClientRect();
+    const pos = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+
+    if (draggedCloud) {
+        draggedCloud.x = pos.x + cloudDragOffset.x;
+        draggedCloud.y = pos.y + cloudDragOffset.y;
+        draggedCloud.rainingTimer = Math.max(draggedCloud.rainingTimer, 60);
+        return;
+    }
+
+    if (draggedKobito) {
+        Body.setPosition(draggedKobito, {
+            x: pos.x + kobitoDragOffset.x,
+            y: pos.y + kobitoDragOffset.y
+        });
+        Body.setVelocity(draggedKobito, { x: 0, y: 0 });
+        return;
+    }
+
+    if (!isDrawing || !lastPointerPos) return;
+
+    if (!pointerMoved && Math.hypot(pos.x - pointerStartPos.x, pos.y - pointerStartPos.y) > 6) {
+        pointerMoved = true;
+    }
+
+    if (pointerMoved && Math.hypot(pos.x - lastPointerPos.x, pos.y - lastPointerPos.y) > 5) { 
+        createLineSegment(lastPointerPos, pos);
+        lastPointerPos = pos;
+    }
+}
+
+function handlePointerUp() {
+    draggedCloud = null;
+
+    if (draggedKobito) {
+        draggedKobito.state = 'walk';
+        draggedKobito.stunTimer = 15;
+        draggedKobito = null;
+    }
+
+    isDrawing = false;
+    lastPointerPos = null;
+}
+
+function createLineSegment(p1, p2) {
+    const distance = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+    const angle = Math.atan2(p2.y - p1.y, p2.x - p1.x);
+    const midX = (p1.x + p2.x) / 2;
+    const midY = (p1.y + p2.y) / 2;
+    const segment = Bodies.rectangle(midX, midY, distance + 2, LINE_THICKNESS, {
+        isStatic: true, friction: 0.6, restitution: 0.1, angle: angle,
+        collisionFilter: { category: CATEGORY_DEFAULT, mask: 0xFFFF }
+    });
+
+    segment.isCustomLine = true;
+    segment.createdAt = performance.now();
+    segment.p1 = { x: p1.x, y: p1.y };
+    segment.p2 = { x: p2.x, y: p2.y };
+
+    segment.isRainbow = performance.now() < rainbowChalkTimer;
+    segment.rainbowHue = Math.floor(Math.random() * 360);
+
+    World.add(world, segment);
+}
+
+function spawnBubble() {
+    const itemTemplate = ITEM_TYPES[Math.floor(Math.random() * ITEM_TYPES.length)];
+    const item = { ...itemTemplate };
+
+    if (item.type === 'cow') {
+        item.direction = Math.random() > 0.5 ? 1 : -1;
+    }
+
+    const isFromLeft = Math.random() > 0.5;
+    const startX = isFromLeft ? -50 : screenWidth + 50;
+    const startY = Math.random() * (screenHeight * 0.45) + 90;
+    const vx = (isFromLeft ? 1 : -1) * (Math.random() * 0.5 + 0.35);
+
+    bubbles.push({
+        x: startX, y: startY, radius: 36, vx: vx,
+        baseY: startY, swingOffset: Math.random() * 100, item: item
+    });
+}
+
+function popBubble(index) {
+    const b = bubbles[index];
+    bubbles.splice(index, 1);
+    spawnPopParticles(b.x, b.y);
+
+    if (b.item.type === 'cow') {
+        spawnCow(b.x, b.y, b.item.direction);
+        return;
+    }
+
+    let body;
+    const opts = {
+        friction: 0.4,
+        restitution: 0.2,
+        collisionFilter: { category: CATEGORY_DEFAULT, mask: 0xFFFF }
+    };
+
+    if (b.item.type === 'largeBall') {
+        body = Bodies.circle(b.x, b.y, b.item.radius, opts);
+    } else if (b.item.type === 'seed') {
+        body = Bodies.circle(b.x, b.y, 8, { ...opts, friction: 0.9, restitution: 0.0 });
+        b.item.stage = 0;
+        b.item.rainHits = 0;
+        b.item.isRooted = false;
+    } else if (b.item.type === 'fireball') {
+        body = Bodies.circle(b.x, b.y, b.item.radius, {
+            ...opts, friction: 0.1, restitution: 0.85, density: 0.003
+        });
+        b.item.waterHits = 0;
+    } else if (b.item.type === 'mushroom') {
+        body = Bodies.rectangle(b.x, b.y, b.item.width, b.item.height, {
+            ...opts, friction: 0.9, density: 0.005
+        });
+        b.item.squish = 0;
+        b.item.jumpCount = 0;
+    } else if (b.item.type === 'ladderShort' || b.item.type === 'ladderLong') {
+        body = Bodies.rectangle(b.x, b.y, b.item.width, b.item.height, {
+            friction: 0.9,
+            restitution: 0.0,
+            density: 0.005,
+            inertia: Infinity,
+            collisionFilter: { category: CATEGORY_LADDER, mask: CATEGORY_DEFAULT }
+        });
+        b.item.climbCount = 0;
+    }
+
+    body.customItem = b.item;
+    World.add(world, body);
+}
+
+function spawnPopParticles(x, y) {
+    for (let i = 0; i < 10; i++) {
+        const angle = (Math.PI * 2 / 10) * i;
+        const speed = Math.random() * 3 + 2;
+        particles.push({
+            x: x, y: y,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            size: Math.random() * 3 + 2,
+            color: '#00E5FF',
+            life: 1.0,
+            decay: 0.04
+        });
+    }
+}
+
+function clearCanvas() {
+    const bodiesToRemove = world.bodies.filter(b => b.isCustomLine || b.customItem || b.isKobito || b.isCow);
+    bodiesToRemove.forEach(b => World.remove(world, b));
+    kobitos = [];
+    cows = [];
+    particles = [];
+    rainDrops = [];
+    snowFlakes = [];
+    lightnings = [];
+    footprints = [];
+    floatTexts = [];
+}
+
+function drawBubbleItem(x, y, item) {
+    ctx.save();
+    ctx.translate(x, y);
+
+    if (item.type === 'largeBall') {
+        ctx.fillStyle = '#FF5252';
+        ctx.beginPath(); ctx.arc(0, 0, 11, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = '#FFFFFF'; ctx.lineWidth = 1.5; ctx.stroke();
+    } else if (item.type === 'ladderShort' || item.type === 'ladderLong') {
+        ctx.strokeStyle = '#FFF9C4'; ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(-6, -14); ctx.lineTo(-6, 14);
+        ctx.moveTo(6, -14);  ctx.lineTo(6, 14);
+        ctx.moveTo(-6, -7);  ctx.lineTo(6, -7);
+        ctx.moveTo(-6, 0);   ctx.lineTo(6, 0);
+        ctx.moveTo(-6, 7);   ctx.lineTo(6, 7);
+        ctx.stroke();
+    } else if (item.type === 'seed') {
+        ctx.fillStyle = '#8BC34A';
+        ctx.beginPath();
+        ctx.ellipse(-4, -2, 3, 5, -0.6, 0, Math.PI * 2);
+        ctx.ellipse(4, -2, 3, 5, 0.6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#689F38'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(0, 6); ctx.lineTo(0, 0); ctx.stroke();
+    } else if (item.type === 'fireball') {
+        ctx.fillStyle = '#FF3D00';
+        ctx.beginPath(); ctx.arc(0, 0, 8, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#FFD600';
+        ctx.beginPath(); ctx.arc(-2, -2, 4, 0, Math.PI * 2); ctx.fill();
+    } else if (item.type === 'mushroom') {
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(-3, 0, 6, 8);
+        ctx.fillStyle = '#FF1744';
+        ctx.beginPath(); ctx.arc(0, 0, 9, Math.PI, 0); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(-2, -6, 2, 2); ctx.fillRect(3, -4, 2, 2);
+    } else if (item.type === 'cow') {
+        if (item.direction === -1) {
+            ctx.scale(-1, 1);
+        }
+
+        if (cowImg && cowImg.complete && cowImg.naturalWidth !== 0) {
+            ctx.drawImage(cowImg, -11, -8, 22, 16);
+        } else {
+            ctx.fillStyle = '#FFFFFF';
+            ctx.beginPath(); ctx.arc(0, 0, 8, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#121316';
+            ctx.fillRect(-5, -4, 4, 4); ctx.fillRect(1, 1, 4, 3);
+            ctx.fillStyle = '#FFD54F';
+            ctx.fillRect(-6, -9, 2, 3); ctx.fillRect(4, -9, 2, 3);
+        }
+    }
+
+    ctx.restore();
+}
+
+function drawSunAndFlare() {
+    ctx.save();
+
+    if (sun.flare > 0) {
+        sun.flare -= 0.02;
+
+        ctx.fillStyle = `rgba(255, 224, 130, ${sun.flare * 0.22})`;
+        ctx.fillRect(0, 0, screenWidth, screenHeight);
+
+        const cx = screenWidth / 2;
+        const cy = screenHeight / 2;
+        const dx = cx - sun.x;
+        const dy = cy - sun.y;
+
+        const flareRings = [
+            { dist: 0.3, r: 25, color: 'rgba(255, 238, 88, 0.4)' },
+            { dist: 0.6, r: 50, color: 'rgba(255, 167, 38, 0.3)' },
+            { dist: 0.8, r: 35, color: 'rgba(255, 255, 255, 0.5)' },
+            { dist: 1.1, r: 70, color: 'rgba(255, 214, 0, 0.25)' },
+            { dist: 1.4, r: 120, color: 'rgba(255, 245, 157, 0.15)' }
+        ];
+
+        flareRings.forEach(f => {
+            const fx = sun.x + dx * f.dist;
+            const fy = sun.y + dy * f.dist;
+            ctx.fillStyle = f.color;
+            ctx.beginPath();
+            ctx.arc(fx, fy, f.r * (0.8 + sun.flare * 0.4), 0, Math.PI * 2);
+            ctx.fill();
+        });
+
+        ctx.strokeStyle = `rgba(255, 245, 157, ${sun.flare * 0.6})`;
+        ctx.lineWidth = 4;
+        for (let a = 0; a < Math.PI * 2; a += Math.PI / 8) {
+            ctx.beginPath();
+            ctx.moveTo(sun.x, sun.y);
+            ctx.lineTo(sun.x + Math.cos(a) * screenWidth * 0.8, sun.y + Math.sin(a) * screenWidth * 0.8);
+            ctx.stroke();
+        }
+    }
+
+    ctx.translate(sun.x, sun.y);
+    ctx.fillStyle = '#FF7043';
+    ctx.beginPath(); ctx.arc(0, 0, sun.radius, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#FFD54F';
+    ctx.beginPath(); ctx.arc(0, 0, sun.radius - 5, 0, Math.PI * 2); ctx.fill();
+
+    ctx.fillStyle = '#121316';
+    ctx.beginPath();
+    ctx.arc(-10, -5, 3, 0, Math.PI * 2); ctx.arc(10, -5, 3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(0, 4, 9, 0.2, Math.PI - 0.2);
+    ctx.lineWidth = 2.5; ctx.strokeStyle = '#121316'; ctx.stroke();
+
+    ctx.restore();
+}
+
+function drawClouds() {
+    clouds.forEach(c => {
+        if (draggedCloud !== c) {
+            c.x += c.vx;
+            if (c.x < -100) c.x = screenWidth + 100;
+            if (c.x > screenWidth + 100) c.x = -100;
+        }
+
+        if (c.rainingTimer > 0) {
+            c.rainingTimer--;
+            makeWeather(c);
+        }
+
+        ctx.save();
+        ctx.translate(c.x, c.y);
+
+        if (c.type === 'thunder') {
+            ctx.fillStyle = '#546E7A';
+        } else if (c.type === 'snow') {
+            ctx.fillStyle = '#E0F7FA';
+        } else {
+            ctx.fillStyle = '#FFFFFF';
+        }
+
+        ctx.beginPath();
+        ctx.arc(0, 0, 22, 0, Math.PI * 2);
+        ctx.arc(-22, 6, 17, 0, Math.PI * 2);
+        ctx.arc(22, 6, 17, 0, Math.PI * 2);
+        ctx.arc(-34, 10, 12, 0, Math.PI * 2);
+        ctx.arc(34, 10, 12, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    });
+}
+
+function drawStars(time) {
+    for (let i = stars.length - 1; i >= 0; i--) {
+        const s = stars[i];
+        s.x += s.vx;
+
+        if (s.x < -60 || s.x > screenWidth + 60) {
+            stars.splice(i, 1);
+            continue;
+        }
+
+        ctx.save();
+        ctx.translate(s.x, s.y);
+        const scale = 1 + Math.sin(time * 0.003 + s.pulseOffset) * 0.12;
+        ctx.scale(scale, scale);
+        ctx.fillStyle = '#FFD600';
+
+        ctx.beginPath();
+        for (let j = 0; j < 5; j++) {
+            ctx.lineTo(Math.cos((18 + j * 72) * Math.PI / 180) * s.radius,
+                      -Math.sin((18 + j * 72) * Math.PI / 180) * s.radius);
+            ctx.lineTo(Math.cos((54 + j * 72) * Math.PI / 180) * (s.radius / 2),
+                      -Math.sin((54 + j * 72) * Math.PI / 180) * (s.radius / 2));
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+    }
+}
+
+function drawCow(c, timestamp) {
+    ctx.save();
+    ctx.translate(c.position.x, c.position.y);
+    ctx.rotate(c.angle);
+
+    if (c.direction === -1) ctx.scale(-1, 1);
+
+    const bobY = Math.sin(timestamp * 0.02) * 3;
+
+    if (cowImg && cowImg.complete && cowImg.naturalWidth !== 0) {
+        const drawH = 74;
+        const aspect = cowImg.naturalWidth / cowImg.naturalHeight;
+        const drawW = drawH * aspect;
+        ctx.drawImage(cowImg, -drawW / 2, (28 - drawH) + bobY, drawW, drawH);
+    } else {
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(-40, -24 + bobY, 80, 48);
+
+        ctx.fillStyle = '#121316';
+        ctx.beginPath();
+        ctx.arc(-12, -8 + bobY, 14, 0, Math.PI * 2);
+        ctx.arc(16, 4 + bobY, 12, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(28, -32 + bobY, 28, 32);
+
+        ctx.fillStyle = '#FFD54F';
+        ctx.beginPath();
+        ctx.moveTo(36, -32 + bobY); ctx.lineTo(40, -44 + bobY); ctx.lineTo(44, -32 + bobY);
+        ctx.fill();
+
+        ctx.fillStyle = '#121316';
+        ctx.fillRect(46, -22 + bobY, 6, 6);
+        ctx.fillStyle = '#FF8A80';
+        ctx.fillRect(52, -12 + bobY, 10, 12);
+
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(-32, 24, 10, 16);
+        ctx.fillRect(-12, 24, 10, 16);
+        ctx.fillRect(8, 24, 10, 16);
+        ctx.fillRect(28, 24, 10, 16);
+    }
+
+    ctx.restore();
+}
+
+function drawPlant(b) {
+    const item = b.customItem;
+    const stage = item.stage || 0;
+
+    ctx.save();
+    ctx.translate(b.position.x, b.position.y);
+    ctx.rotate(b.angle);
+
+    if (stage === 0) {
+        ctx.fillStyle = '#8D6E63';
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 5, 7, 0.4, 0, Math.PI * 2);
+        ctx.fill();
+    } else if (stage === 1) {
+        ctx.fillStyle = '#76FF03';
+        ctx.beginPath();
+        ctx.ellipse(-6, -6, 4, 7, -0.6, 0, Math.PI * 2);
+        ctx.ellipse(6, -6, 4, 7, 0.6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#64DD17'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(0, 4); ctx.lineTo(0, -4); ctx.stroke();
+    } else if (stage === 2) {
+        ctx.strokeStyle = '#64DD17'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(0, 6); ctx.lineTo(0, -8); ctx.stroke();
+        ctx.fillStyle = '#FFFFFF';
+        for (let i = 0; i < 5; i++) {
+            const a = (i * Math.PI * 2) / 5;
+            ctx.beginPath();
+            ctx.arc(Math.cos(a) * 6, -8 + Math.sin(a) * 6, 3, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        ctx.fillStyle = '#FFD600';
+        ctx.beginPath(); ctx.arc(0, -8, 3, 0, Math.PI * 2); ctx.fill();
+    } else {
+        ctx.fillStyle = '#00E676';
+        ctx.beginPath();
+        ctx.moveTo(-7, -10); ctx.lineTo(0, -7); ctx.lineTo(7, -10);
+        ctx.lineTo(3, -5); ctx.lineTo(0, -12); ctx.lineTo(-3, -5);
+        ctx.fill();
+        ctx.fillStyle = '#FF1744';
+        ctx.beginPath();
+        ctx.moveTo(-10, -6);
+        ctx.quadraticCurveTo(-11, 4, 0, 13);
+        ctx.quadraticCurveTo(11, 4, 10, -6);
+        ctx.quadraticCurveTo(0, -8, -10, -6);
+        ctx.fill();
+        ctx.fillStyle = '#FFF9C4';
+        [[-4,-2], [4,-2], [0,3], [-3,6], [3,6]].forEach(p => {
+            ctx.fillRect(p[0], p[1], 1.5, 1.5);
+        });
+    }
+
+    ctx.restore();
+}
+
+function drawItem(b) {
+    const item = b.customItem;
+    if (item.type === 'seed') {
+        drawPlant(b);
+        return;
+    }
+
+    ctx.save();
+    ctx.translate(b.position.x, b.position.y);
+    ctx.rotate(b.angle);
+
+    if (item.type === 'largeBall') {
+        ctx.beginPath();
+        ctx.arc(0, 0, item.radius, 0, Math.PI * 2);
+        ctx.fillStyle = item.color;
+        ctx.fill();
+        ctx.strokeStyle = '#FFFFFF';
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+        ctx.beginPath();
+        ctx.arc(-item.radius * 0.35, -item.radius * 0.35, item.radius * 0.28, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 綱引きバトル中の押し合いゲージ
+        if (item.battle && item.battle.state === 'fighting') {
+            ctx.restore();
+            ctx.save();
+            ctx.translate(b.position.x, b.position.y - 32);
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+            ctx.fillRect(-18, -3, 36, 6);
+            ctx.fillStyle = '#FF5252';
+            const offset = Math.max(-16, Math.min(16, (b.position.x - item.battle.startX) * 0.3));
+            ctx.fillRect(offset - 2, -5, 4, 10);
+            ctx.restore();
+            return;
+        }
+    } else if (item.type === 'ladderShort' || item.type === 'ladderLong') {
+        const w = item.width;
+        const h = item.height;
+        ctx.strokeStyle = item.color;
+        ctx.lineWidth = 3;
+
+        ctx.beginPath();
+        ctx.moveTo(-w / 2, -h / 2); ctx.lineTo(-w / 2, h / 2);
+        ctx.moveTo(w / 2, -h / 2);  ctx.lineTo(w / 2, h / 2);
+        ctx.stroke();
+
+        ctx.lineWidth = 2.5;
+        const stepCount = Math.floor(h / 16);
+        for (let i = 1; i <= stepCount; i++) {
+            const stepY = -h / 2 + (h / (stepCount + 1)) * i;
+            ctx.beginPath();
+            ctx.moveTo(-w / 2, stepY); ctx.lineTo(w / 2, stepY);
+            ctx.stroke();
+        }
+    } else if (item.type === 'fireball') {
+        ctx.fillStyle = '#FF3D00';
+        ctx.beginPath(); ctx.arc(0, 0, item.radius, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#FFAB00';
+        ctx.beginPath(); ctx.arc(-3, -3, item.radius * 0.55, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#FFFF00';
+        ctx.beginPath(); ctx.arc(-5, -5, item.radius * 0.25, 0, Math.PI * 2); ctx.fill();
+
+        if (Math.random() > 0.4) {
+            particles.push({
+                x: b.position.x + (Math.random() - 0.5) * 12,
+                y: b.position.y + (Math.random() - 0.5) * 12,
+                vx: (Math.random() - 0.5) * 2,
+                vy: -Math.random() * 3 - 1,
+                size: Math.random() * 3 + 2,
+                color: '#FF6D00',
+                life: 0.8,
+                decay: 0.05
+            });
+        }
+    } else if (item.type === 'mushroom') {
+        if (item.squish > 0) item.squish -= 0.1;
+        const squishScaleY = 1.0 - (item.squish || 0) * 0.4;
+        const squishScaleX = 1.0 + (item.squish || 0) * 0.3;
+        ctx.scale(squishScaleX, squishScaleY);
+
+        ctx.fillStyle = '#FFF8E1';
+        ctx.fillRect(-8, 0, 16, 14);
+
+        ctx.fillStyle = '#FF1744';
+        ctx.beginPath();
+        ctx.arc(0, 0, 22, Math.PI, 0);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.fillStyle = '#FFFFFF';
+        ctx.beginPath();
+        ctx.arc(-10, -9, 4, 0, Math.PI * 2);
+        ctx.arc(8, -11, 4.5, 0, Math.PI * 2);
+        ctx.arc(0, -15, 3.5, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    ctx.restore();
+}
+
+function drawKobito(k, timestamp) {
+    ctx.save();
+    ctx.translate(k.position.x, k.position.y);
+    ctx.rotate(k.angle);
+    
+    if (k.direction === -1) {
+        ctx.scale(-1, 1);
+    }
+
+    let bobY = 0;
+    if (k.state === 'grabbed') {
+        bobY = Math.sin(timestamp * 0.04) * 3;
+        ctx.rotate(Math.sin(timestamp * 0.03) * 0.15);
+    } else if (k.state === 'ballRide') {
+        ctx.rotate(Math.sin(timestamp * 0.02) * 0.18);
+    } else if (k.state === 'slide') {
+        ctx.rotate(-0.32);
+        bobY = 5;
+    } else if (k.state === 'walk' && k.stunTimer === 0) {
+        const anim = Math.sin(timestamp * 0.016 + k.walkAnimPhase);
+        bobY = -Math.abs(anim) * 4;
+        ctx.rotate(anim * 0.06);
+    }
+
+    // 風船
+    if (k.state === 'balloon') {
+        const balloonColor = k.balloonColor || '#FF4081';
+        const floatSwing = Math.sin(timestamp * 0.004 + (k.balloonSwing || 0)) * 6;
+        
+        ctx.save();
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(0, -10);
+        ctx.quadraticCurveTo(floatSwing * 0.5, -35, floatSwing, -55);
+        ctx.stroke();
+
+        ctx.translate(floatSwing, -55);
+        ctx.fillStyle = balloonColor;
+        ctx.beginPath();
+        ctx.ellipse(0, -14, 15, 19, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(-3, 5); ctx.lineTo(3, 5); ctx.lineTo(0, 1);
+        ctx.fill();
+
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+        ctx.beginPath();
+        ctx.ellipse(-5, -20, 4, 7, -0.4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    }
+
+    const img = KOBITO_IMAGES[k.imageIndex];
+    if (img && img.complete && img.naturalWidth !== 0) {
+        const drawW = 48;
+        const drawH = 76;
+        ctx.drawImage(img, -drawW / 2, (26 - drawH) + bobY, drawW, drawH);
+    } else {
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(-12, -26 + bobY, 24, 52);
+
+        ctx.fillStyle = k.color;
+        ctx.beginPath();
+        ctx.moveTo(-16, -26 + bobY);
+        ctx.lineTo(16, -26 + bobY);
+        ctx.lineTo(0, -52 + bobY);
+        ctx.closePath();
+        ctx.fill();
+    }
+
+    if (k.state === 'climb') {
+        ctx.strokeStyle = '#FFFFFF';
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.moveTo(-12, -8); ctx.lineTo(-20, -16);
+        ctx.moveTo(12, 8);   ctx.lineTo(20, 0);
+        ctx.stroke();
+    }
+
+    ctx.restore();
+}
+
+function loop(timestamp) {
+    Matter.Engine.update(engine, 1000 / 60);
+
+    ctx.clearRect(0, 0, screenWidth, screenHeight);
+
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.03)';
+    ctx.lineWidth = 1;
+    for (let x = 0; x < screenWidth; x += 40) {
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, screenHeight); ctx.stroke();
+    }
+    for (let y = 0; y < screenHeight; y += 40) {
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(screenWidth, y); ctx.stroke();
+    }
+
+    // てんてん足跡
+    for (let i = footprints.length - 1; i >= 0; i--) {
+        const fp = footprints[i];
+        fp.life -= 0.007;
+        if (fp.life <= 0) {
+            footprints.splice(i, 1);
+            continue;
+        }
+        ctx.save();
+        ctx.fillStyle = `rgba(255, 255, 255, ${fp.life * 0.45})`;
+        ctx.beginPath();
+        ctx.ellipse(fp.x, fp.y, 3, 2, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    }
+
+    // 白い地面ライン
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+    ctx.lineWidth = 3.5;
+    ctx.beginPath();
+    ctx.moveTo(0, GROUND_Y);
+    ctx.lineTo(screenWidth, GROUND_Y);
+    ctx.stroke();
+    ctx.restore();
+
+    drawClouds();
+    drawStars(timestamp);
+
+    updateWeather();
+
+    // チョウチョの更新・描画
+    updateButterflies();
+    drawButterflies();
+
+    // 雨
+    ctx.strokeStyle = '#4FC3F7';
+    ctx.lineWidth = 1.5;
+    rainDrops.forEach(r => {
+        ctx.beginPath();
+        ctx.moveTo(r.x, r.y);
+        ctx.lineTo(r.x, r.y + r.length);
+        ctx.stroke();
+    });
+
+    // 雪
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+    snowFlakes.forEach(s => {
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2);
+        ctx.fill();
+    });
+
+    // カミナリ
+    lightnings.forEach(l => {
+        ctx.save();
+        ctx.strokeStyle = `rgba(255, 238, 88, ${l.life})`;
+        ctx.lineWidth = 3.5;
+        ctx.shadowColor = '#FFEB3B';
+        ctx.shadowBlur = 10;
+        ctx.beginPath();
+        ctx.moveTo(l.startX, l.startY);
+        const midY1 = l.startY + (l.endY - l.startY) * 0.35;
+        const midY2 = l.startY + (l.endY - l.startY) * 0.7;
+        ctx.lineTo(l.startX + 18, midY1);
+        ctx.lineTo(l.startX - 14, midY2);
+        ctx.lineTo(l.endX, l.endY);
+        ctx.stroke();
+        ctx.restore();
+    });
+
+    const allBodies = Composite.allBodies(world);
+    const now = performance.now();
+
+    allBodies.forEach(b => {
+        if (b.isCustomLine) {
+            const age = now - b.createdAt;
+            if (age >= LINE_LIFETIME) {
+                World.remove(world, b);
+                return;
+            }
+
+            let alpha = 1.0;
+            const timeLeft = LINE_LIFETIME - age;
+            if (timeLeft < LINE_FADE_DURATION) {
+                alpha = timeLeft / LINE_FADE_DURATION;
+            }
+
+            ctx.save();
+            ctx.beginPath();
+            ctx.moveTo(b.vertices[0].x, b.vertices[0].y);
+            for (let i = 1; i < b.vertices.length; i++) ctx.lineTo(b.vertices[i].x, b.vertices[i].y);
+            ctx.closePath();
+
+            if (b.isRainbow) {
+                const hue = (now * 0.12 + (b.rainbowHue || 0)) % 360;
+                ctx.fillStyle = `hsla(${hue}, 100%, 70%, ${alpha})`;
+                ctx.shadowColor = `hsla(${hue}, 100%, 60%, ${alpha})`;
+                ctx.shadowBlur = 6;
+            } else {
+                ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+            }
+            ctx.fill();
+            ctx.restore();
+        } else if (b.customItem) {
+            drawItem(b);
+        } else if (b.isCow) {
+            drawCow(b, timestamp);
+        } else if (b.isKobito) {
+            drawKobito(b, timestamp);
+        }
+    });
+
+    for (let i = bubbles.length - 1; i >= 0; i--) {
+        const b = bubbles[i];
+        b.x += b.vx;
+        b.y = b.baseY + Math.sin(timestamp * 0.0018 + b.swingOffset) * 18;
+        if (b.x < -80 || b.x > screenWidth + 80) {
+            bubbles.splice(i, 1);
+            continue;
+        }
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(0, 229, 255, 0.7)';
+        ctx.lineWidth = 2.5;
+        ctx.fillStyle = 'rgba(0, 229, 255, 0.12)';
+        ctx.fill();
+        ctx.stroke();
+
+        drawBubbleItem(b.x, b.y, b.item);
+        ctx.restore();
+    }
+
+    drawSunAndFlare();
+
+    for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.life -= p.decay;
+
+        if (p.life <= 0) {
+            particles.splice(i, 1);
+            continue;
+        }
+
+        ctx.save();
+        ctx.fillStyle = p.color;
+        ctx.globalAlpha = p.life;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    }
+
+    // セリフ描画（白文字統一 ＆ 13px）
+    for (let i = floatTexts.length - 1; i >= 0; i--) {
+        const ft = floatTexts[i];
+        ft.y -= 0.5;
+        ft.life -= 0.02;
+        if (ft.life <= 0) {
+            floatTexts.splice(i, 1);
+            continue;
+        }
+        ctx.save();
+        ctx.font = 'bold 13px sans-serif';
+        ctx.fillStyle = '#FFFFFF';
+        ctx.globalAlpha = ft.life;
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
+        ctx.shadowBlur = 4;
+        ctx.fillText(ft.text, ft.x - 16, ft.y);
+        ctx.restore();
+    }
+
+    requestAnimationFrame(loop);
+}
+
+window.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
